@@ -187,7 +187,7 @@ EVENTS = [
 
 
 def main():
-    client = LedgerClient("localhost:19092")
+    client = LedgerClient("localhost:19292")
 
     print(f"\n{'='*60}")
     print(f"  Loading Cross-System Sample Data")

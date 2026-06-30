@@ -97,7 +97,7 @@ Thin bridges for existing agentic systems:
 ```
 System A ──→ adapter ──→ ┌─────────────────────┐
                          │  Immutable Ledger    │
-System B ──→ adapter ──→ │  (gRPC :19092)       │ ←── proof-explorer CLI
+System B ──→ adapter ──→ │  (gRPC :19292)       │ ←── proof-explorer CLI
                          │                     │
 System C ──→ direct  ──→ │  PostgreSQL (chains) │
                          └─────────────────────┘

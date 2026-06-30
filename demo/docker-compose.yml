@@ -25,7 +25,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      ARE_LEDGER_DB_CONNECTION_STRING: "host=postgres port=5432 user=ledger password=ledger dbname=ledger sslmode=disable"
+      ARE_LEDGER_DB_CONNECTION_STRING: "host=postgres port=5432 user=ledger_app password=ledger_app dbname=ledger sslmode=disable"
       ARE_LEDGER_GRPC_PORT: "19092"
       ARE_LEDGER_HEALTH_PORT: "8080"
       ARE_LEDGER_METRICS_PORT: "8083"
@@ -33,7 +33,7 @@ services:
       ARE_LEDGER_KAFKA_SASL_USERNAME: "unused"
       ARE_LEDGER_KAFKA_SASL_PASSWORD: "unused"
     ports:
-      - "19092:19092"
+      - "19292:19092"
       - "18080:8080"
       - "18083:8083"
     healthcheck:

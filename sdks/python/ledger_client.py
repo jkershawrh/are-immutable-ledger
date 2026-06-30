@@ -12,7 +12,7 @@ import immutable_ledger_pb2_grpc as pb_grpc
 
 
 class LedgerClient:
-    def __init__(self, endpoint="localhost:19092"):
+    def __init__(self, endpoint="localhost:19292"):
         self.channel = grpc.insecure_channel(endpoint)
         self.stub = pb_grpc.ImmutableLedgerServiceStub(self.channel)
 

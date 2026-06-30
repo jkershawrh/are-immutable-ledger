@@ -26,5 +26,11 @@ demo: setup-python
 verify:
 	python3 ../proof-explorer/proof.py verify --all
 
+evidence: setup-python
+	python3 ../tests/run_evidence.py
+
+evidence-report:
+	@python3 -c "import json; r=json.load(open('../tests/evidence-results.json')); print(f'GREEN: {r[\"green\"]}  RED: {r[\"red\"]}  Total: {r[\"total\"]}')"
+
 clean: down
-	rm -rf ../sdks/python/generated/*.py
+	rm -rf ../sdks/python/generated/*.pyc ../tests/evidence-results.json
