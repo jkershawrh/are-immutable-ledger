@@ -1,7 +1,7 @@
 target/
 *.pyc
 __pycache__/
-sdks/python/generated/
+sdks/python/generated/*.pyc
 *.egg-info/
 .env
 reports/
