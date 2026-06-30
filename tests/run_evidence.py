@@ -93,6 +93,28 @@ def test_l1_05(c):
     assert p2 == p1 + 1, f"Position gap: {p1} → {p2}"
     assert p3 == p2 + 1, f"Position gap: {p2} → {p3}"
 
+@test("L1.06", "Hash is deterministic (same input produces same hash)")
+def test_l1_06(c):
+    etype = f"test.l1.deterministic.{uuid.uuid4().hex[:8]}"
+    content = '{"deterministic": true}'
+    r1 = c.write(etype, "test-agent-l1", content, source_id="evidence-runner")
+    e1 = c.get_entry(r1.entry_id)
+    computed = hashlib.sha256(
+        (etype + "test-agent-l1" + content + "application/json" + "evidence-runner"
+         + str(e1.written_ts) + e1.previous_hash).encode()
+    ).hexdigest()
+    assert e1.entry_hash == computed, f"Hash mismatch: {e1.entry_hash} != {computed}"
+
+@test("L1.07", "Chain linkage: previous_hash is included in entry_hash")
+def test_l1_07(c):
+    etype = f"test.l1.linkage.{uuid.uuid4().hex[:8]}"
+    r1 = c.write(etype, "test-agent-l1", '{"seq": 1}', source_id="evidence-runner")
+    r2 = c.write(etype, "test-agent-l1", '{"seq": 2}', source_id="evidence-runner")
+    e1 = c.get_entry(r1.entry_id)
+    e2 = c.get_entry(r2.entry_id)
+    assert e2.previous_hash == e1.entry_hash, f"Entry 2 previous_hash doesn't match entry 1 hash"
+    assert e2.entry_hash != e1.entry_hash, "Entries should have different hashes"
+
 @test("L1.08", "First entry uses genesis hash")
 def test_l1_08(c):
     etype = f"test.l1.genesis.{uuid.uuid4().hex[:8]}"
@@ -100,6 +122,26 @@ def test_l1_08(c):
     entry = c.get_entry(resp.entry_id)
     genesis = hashlib.sha256("ARE_LEDGER_GENESIS".encode()).hexdigest()
     assert entry.previous_hash == genesis, f"Expected genesis hash, got {entry.previous_hash}"
+
+@test("L1.09", "Database rejects UPDATE on ledger_entries")
+def test_l1_09(c):
+    import subprocess
+    result = subprocess.run(
+        ["/opt/podman/bin/podman", "exec", "demo_postgres_1", "psql", "-U", "ledger_app", "-d", "ledger", "-c",
+         "UPDATE are_ledger.ledger_entries SET agent_id='hacked' WHERE 1=0;"],
+        capture_output=True, text=True, timeout=10)
+    assert "permission denied" in result.stderr.lower() or result.returncode != 0, \
+        f"UPDATE should be denied, got: {result.stderr}"
+
+@test("L1.10", "Database rejects DELETE on ledger_entries")
+def test_l1_10(c):
+    import subprocess
+    result = subprocess.run(
+        ["/opt/podman/bin/podman", "exec", "demo_postgres_1", "psql", "-U", "ledger_app", "-d", "ledger", "-c",
+         "DELETE FROM are_ledger.ledger_entries WHERE 1=0;"],
+        capture_output=True, text=True, timeout=10)
+    assert "permission denied" in result.stderr.lower() or result.returncode != 0, \
+        f"DELETE should be denied, got: {result.stderr}"
 
 
 # ─── L2: Chain Verification ──────────────────────────────
@@ -121,6 +163,27 @@ def test_l2_03(c):
     assert v.chain_valid, f"Chain invalid: {v.failure_reason}"
     assert v.entries_checked == 5, f"Expected 5, got {v.entries_checked}"
 
+@test("L2.02", "VerifyEntry detects tampered content")
+def test_l2_02(c):
+    import subprocess
+    etype = f"test.l2.tamper.{uuid.uuid4().hex[:8]}"
+    resp = c.write(etype, "test-agent-l2", '{"original": true}', source_id="evidence-runner")
+    subprocess.run(
+        ["/opt/podman/bin/podman", "exec", "demo_postgres_1", "psql", "-U", "ledger", "-d", "ledger", "-c",
+         f"UPDATE are_ledger.ledger_entries SET content='{{\"tampered\": true}}'::bytea WHERE entry_id='{resp.entry_id}';"],
+        capture_output=True, text=True, timeout=10)
+    v = c.verify_entry(resp.entry_id)
+    assert not v.hash_valid, "Tampered entry should fail hash verification"
+
+@test("L2.05", "VerifyChain reports accurate entries_checked count")
+def test_l2_05(c):
+    etype = f"test.l2.count.{uuid.uuid4().hex[:8]}"
+    n = 7
+    for i in range(n):
+        c.write(etype, "test-agent-l2", json.dumps({"seq": i}), source_id="evidence-runner")
+    v = c.verify_chain(etype)
+    assert v.entries_checked == n, f"Expected {n}, got {v.entries_checked}"
+
 @test("L2.06", "GetChainTip returns latest entry")
 def test_l2_06(c):
     etype = f"test.l2.tip.{uuid.uuid4().hex[:8]}"
@@ -130,6 +193,11 @@ def test_l2_06(c):
     tip = c.get_chain_tip(etype)
     assert tip.entry_id == last.entry_id, "Tip doesn't match last written entry"
     assert tip.entry_hash == last.entry_hash, "Tip hash doesn't match"
+
+@test("L2.07", "VerifyChain on empty/nonexistent chain")
+def test_l2_07(c):
+    v = c.verify_chain(f"test.l2.nonexistent.{uuid.uuid4().hex[:8]}")
+    assert v.entries_checked == 0, f"Expected 0 entries, got {v.entries_checked}"
 
 
 # ─── L3: Cross-System Query ──────────────────────────────
@@ -152,6 +220,26 @@ def test_l3_02(c):
     results = c.query(correlation_id=corr)
     sources = set(e.source_id for e in results)
     assert len(sources) >= 2, f"Expected entries from 2+ sources, got {sources}"
+
+@test("L3.03", "QueryEntries by source_id returns only that source")
+def test_l3_03(c):
+    src = f"source-{uuid.uuid4().hex[:8]}"
+    c.write("test.l3.source", "agent-x", '{"src": "target"}', source_id=src)
+    c.write("test.l3.source", "agent-x", '{"src": "other"}', source_id="other-source")
+    results = c.query(source_id=src)
+    for e in results:
+        assert e.source_id == src, f"Got wrong source: {e.source_id}"
+    assert len(results) >= 1, "Should find at least 1 entry"
+
+@test("L3.04", "QueryEntries by entry_type prefix returns matching entries")
+def test_l3_04(c):
+    prefix = f"test.l3.prefix.{uuid.uuid4().hex[:8]}"
+    c.write(f"{prefix}.alpha", "agent-x", '{"sub": "alpha"}', source_id="evidence-runner")
+    c.write(f"{prefix}.beta", "agent-x", '{"sub": "beta"}', source_id="evidence-runner")
+    c.write("test.l3.other", "agent-x", '{"sub": "other"}', source_id="evidence-runner")
+    results = c.query(entry_type=prefix)
+    for e in results:
+        assert e.entry_type.startswith(prefix), f"Got non-matching type: {e.entry_type}"
 
 @test("L3.07", "Multiple sources write concurrently without corruption")
 def test_l3_07(c):
@@ -192,6 +280,17 @@ def test_l4_01(c):
     for aid in ids:
         assert aid in found_ids, f"Agent ID {aid} not found"
 
+@test("L4.02", "Query by one agent_id does not return others")
+def test_l4_02(c):
+    unique = uuid.uuid4().hex[:8]
+    aid_target = f"target-{unique}"
+    aid_other = f"other-{unique}"
+    c.write(f"test.l4.isolate.{unique}", aid_target, '{"mine": true}', source_id="evidence-runner")
+    c.write(f"test.l4.isolate.{unique}", aid_other, '{"mine": false}', source_id="evidence-runner")
+    results = c.query(agent_id=aid_target)
+    for e in results:
+        assert e.agent_id == aid_target, f"Leaked entry from {e.agent_id}"
+
 @test("L4.03", "Same correlation_id links entries with different agent_ids")
 def test_l4_03(c):
     corr = f"shared-trace-{uuid.uuid4().hex[:8]}"
@@ -225,6 +324,43 @@ def test_l5_03(c):
     from ocsf_to_ledger import extract_entry_type
     assert extract_entry_type({"class_uid": 4002}) == "openshell.http_activity"
 
+@test("L5.04", "metadata.uid extracted as agent_id")
+def test_l5_04(c):
+    from ocsf_to_ledger import extract_agent_id
+    assert extract_agent_id({"metadata": {"uid": "sbx-my-sandbox"}}) == "sbx-my-sandbox"
+    assert extract_agent_id({"container": {"uid": "container-fallback"}}) == "container-fallback"
+
+@test("L5.05", "unmapped.request_id extracted as correlation_id")
+def test_l5_05(c):
+    from ocsf_to_ledger import extract_correlation_id
+    assert extract_correlation_id({"unmapped": {"request_id": "req-456"}}) == "req-456"
+    assert extract_correlation_id({"unmapped": {"trace_id": "trace-789"}}) == "trace-789"
+    assert extract_correlation_id({}) == ""
+
+@test("L5.06", "Raw OCSF JSON preserved as content bytes")
+def test_l5_06(c):
+    ocsf_line = json.dumps({"class_uid": 4002, "class_name": "HTTP Activity",
+                            "metadata": {"uid": "sbx-l5-06"}, "custom_field": "preserved"})
+    resp = c.write("openshell.http_activity", "sbx-l5-06", ocsf_line,
+                   content_type="application/ocsf+json", source_id="openshell-supervisor")
+    entry = c.get_entry(resp.entry_id)
+    recovered = json.loads(entry.content.decode("utf-8"))
+    assert recovered["custom_field"] == "preserved", "Content not preserved losslessly"
+
+@test("L5.07", "Malformed JSON line skipped without crash")
+def test_l5_07(c):
+    from ocsf_to_ledger import process_line
+    stats = {"written": 0, "parse_errors": 0, "write_errors": 0, "skipped": 0}
+    process_line(c, "this is not json{{{", stats)
+    assert stats["parse_errors"] == 1, f"Expected 1 parse error, got {stats}"
+
+@test("L5.08", "Non-OCSF JSON line skipped")
+def test_l5_08(c):
+    from ocsf_to_ledger import process_line
+    stats = {"written": 0, "parse_errors": 0, "write_errors": 0, "skipped": 0}
+    process_line(c, '{"not_ocsf": true, "random_key": 42}', stats)
+    assert stats["skipped"] == 1, f"Expected 1 skipped, got {stats}"
+
 
 # ─── L6: OTEL Adapter ────────────────────────────────────
 
@@ -248,6 +384,19 @@ def test_l6_03(c):
     from otel_to_ledger import extract_entry_type
     assert extract_entry_type({"name": "llm.request"}) == "kagenti.llm.request"
 
+@test("L6.04", "resource.attributes.service.name extracted as agent_id")
+def test_l6_04(c):
+    from otel_to_ledger import extract_agent_id
+    assert extract_agent_id({"resource": {"attributes": {"service.name": "my-svc"}}}) == "my-svc"
+    assert extract_agent_id({"resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "list-svc"}}]}}) == "list-svc"
+
+@test("L6.05", "traceId extracted as correlation_id")
+def test_l6_05(c):
+    from otel_to_ledger import extract_trace_id
+    assert extract_trace_id({"traceId": "abc"}) == "abc"
+    assert extract_trace_id({"trace_id": "def"}) == "def"
+    assert extract_trace_id({"spanContext": {"traceId": "ghi"}}) == "ghi"
+
 @test("L6.06", "OTLP resourceSpans envelope parsed correctly")
 def test_l6_06(c):
     from otel_to_ledger import try_parse_span
@@ -258,6 +407,21 @@ def test_l6_06(c):
     spans = try_parse_span(envelope)
     assert spans and len(spans) == 1, f"Expected 1 span, got {spans}"
     assert spans[0]["name"] == "test.span"
+
+@test("L6.07", "Flat span JSON parsed correctly")
+def test_l6_07(c):
+    from otel_to_ledger import try_parse_span
+    flat = json.dumps({"name": "flat.span", "traceId": "flat-t1"})
+    spans = try_parse_span(flat)
+    assert spans and len(spans) == 1
+    assert spans[0]["name"] == "flat.span"
+
+@test("L6.08", "Malformed JSON skipped without crash")
+def test_l6_08(c):
+    from otel_to_ledger import process_line
+    stats = {"written": 0, "write_errors": 0, "skipped": 0}
+    process_line(c, "not json at all{{{", stats)
+    assert stats["skipped"] == 1
 
 
 # ─── L8: Demo Narrative ──────────────────────────────────
@@ -278,7 +442,6 @@ def test_l8_01(c):
 
 @test("L8.02", "trace-aaa correlates Kagenti + OpenShell")
 def test_l8_02(c):
-    # Write the two events that should correlate
     c.write("test.l8.kagenti", "spiffe://demo", '{"tool": "check"}',
             source_id="kagenti-test", correlation_id="trace-aaa-test")
     c.write("test.l8.openshell", "sbx-demo", '{"action": "Allowed"}',
@@ -287,24 +450,114 @@ def test_l8_02(c):
     sources = set(e.source_id for e in results)
     assert "kagenti-test" in sources and "openshell-test" in sources, f"Missing sources: {sources}"
 
+@test("L8.03", "trace-bbb correlates tool call + network deny")
+def test_l8_03(c):
+    corr = f"trace-bbb-{uuid.uuid4().hex[:8]}"
+    c.write("test.l8.kagenti.deny", "spiffe://demo", json.dumps({"tool.name": "promote-model"}),
+            source_id="kagenti-test", correlation_id=corr)
+    c.write("test.l8.openshell.deny", "sbx-demo",
+            json.dumps({"action": "Denied", "disposition": "Blocked", "dst_endpoint": {"domain": "api.github.com"}}),
+            source_id="openshell-test", correlation_id=corr)
+    results = c.query(correlation_id=corr)
+    assert len(results) == 2, f"Expected 2 entries, got {len(results)}"
+    sources = set(e.source_id for e in results)
+    assert len(sources) == 2, f"Expected 2 sources, got {sources}"
+
+@test("L8.05", "Three independent chains verify clean after sample load")
+def test_l8_05(c):
+    for prefix in ["are.", "openshell.", "kagenti."]:
+        entries = c.query(entry_type=prefix)
+        if entries:
+            types = set(e.entry_type for e in entries)
+            for t in types:
+                v = c.verify_chain(t)
+                assert v.chain_valid, f"Chain {t} invalid: {v.failure_reason}"
+
+@test("L8.06", "Standalone agent chain is independent")
+def test_l8_06(c):
+    entries = c.query(entry_type="standalone.")
+    if not entries:
+        etype = f"test.l8.standalone.{uuid.uuid4().hex[:8]}"
+        c.write(etype, "standalone-agent", '{"independent": true}', source_id="standalone")
+        entries = c.query(entry_type=etype)
+    assert len(entries) >= 1, "No standalone entries found"
+    types = set(e.entry_type for e in entries)
+    for t in types:
+        v = c.verify_chain(t)
+        assert v.chain_valid, f"Standalone chain {t} invalid"
+
+
+# ─── L10: Resilience ─────────────────────────────────────
+
+@test("L10.03", "Large content (up to 1 MiB) accepted")
+def test_l10_03(c):
+    large = json.dumps({"data": "x" * (512 * 1024)})  # ~512KB
+    resp = c.write(f"test.l10.large.{uuid.uuid4().hex[:8]}", "test-agent-l10", large,
+                   source_id="evidence-runner")
+    assert resp.entry_id, "Large content should be accepted"
+    entry = c.get_entry(resp.entry_id)
+    assert len(entry.content) == len(large.encode("utf-8")), "Content size mismatch"
+
+@test("L10.04", "Oversized content rejected")
+def test_l10_04(c):
+    import grpc
+    oversized = json.dumps({"data": "x" * (2 * 1024 * 1024)})  # ~2MB, over 1MiB limit
+    try:
+        c.write(f"test.l10.oversized.{uuid.uuid4().hex[:8]}", "test-agent-l10", oversized,
+                source_id="evidence-runner")
+        assert False, "Should have rejected oversized content"
+    except grpc.RpcError as e:
+        assert e.code() == grpc.StatusCode.INVALID_ARGUMENT or "size" in str(e).lower() or "too large" in str(e).lower(), \
+            f"Expected size rejection, got: {e.code()} {e.details()}"
+
+@test("L10.05", "Chains survive ledger restart")
+def test_l10_05(c):
+    import subprocess
+    etype = f"test.l10.restart.{uuid.uuid4().hex[:8]}"
+    for i in range(3):
+        c.write(etype, "test-agent-l10", json.dumps({"seq": i}), source_id="evidence-runner")
+    v_before = c.verify_chain(etype)
+    assert v_before.chain_valid, "Chain should be valid before restart"
+    assert v_before.entries_checked == 3, "Should have 3 entries before restart"
+
+    subprocess.run(["/opt/podman/bin/podman", "restart", "demo_ledger_1"],
+                   capture_output=True, timeout=30)
+    time.sleep(5)
+    for _ in range(10):
+        try:
+            c_new = LedgerClient(ENDPOINT)
+            v_after = c_new.verify_chain(etype)
+            assert v_after.chain_valid, "Chain should be valid after restart"
+            assert v_after.entries_checked == 3, f"Should still have 3 entries, got {v_after.entries_checked}"
+            c_new.close()
+            return
+        except Exception:
+            time.sleep(2)
+    assert False, "Ledger did not come back after restart"
+
 
 # ─── Runner ──────────────────────────────────────────────
 
 ALL_TESTS = [
-    # L1
-    test_l1_01, test_l1_02, test_l1_04, test_l1_05, test_l1_08,
-    # L2
-    test_l2_01, test_l2_03, test_l2_06,
-    # L3
-    test_l3_01, test_l3_02, test_l3_07,
-    # L4
-    test_l4_01, test_l4_03,
-    # L5
-    test_l5_01, test_l5_02, test_l5_03,
-    # L6
-    test_l6_01, test_l6_02, test_l6_03, test_l6_06,
-    # L8
-    test_l8_01, test_l8_02,
+    # L1: Ledger Core
+    test_l1_01, test_l1_02, test_l1_04, test_l1_05, test_l1_06, test_l1_07,
+    test_l1_08, test_l1_09, test_l1_10,
+    # L2: Chain Verification
+    test_l2_01, test_l2_02, test_l2_03, test_l2_05, test_l2_06, test_l2_07,
+    # L3: Cross-System Query
+    test_l3_01, test_l3_02, test_l3_03, test_l3_04, test_l3_07,
+    # L4: Identity Independence
+    test_l4_01, test_l4_02, test_l4_03,
+    # L5: OCSF Adapter
+    test_l5_01, test_l5_02, test_l5_03, test_l5_04, test_l5_05, test_l5_06,
+    test_l5_07, test_l5_08,
+    # L6: OTEL Adapter
+    test_l6_01, test_l6_02, test_l6_03, test_l6_04, test_l6_05, test_l6_06,
+    test_l6_07, test_l6_08,
+    # L8: Demo Narrative
+    test_l8_01, test_l8_02, test_l8_03, test_l8_05, test_l8_06,
+    # L10: Resilience
+    test_l10_03, test_l10_04, test_l10_05,
 ]
 
 
