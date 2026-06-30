@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ledger
+      POSTGRES_DB: ledger
+    ports:
+      - "54329:5432"
+    volumes:
+      - ../migrations/001_init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ../migrations/002_correlation_id_text.sql:/docker-entrypoint-initdb.d/02-correlation-id.sql
+      - ./postgres-init/03-permissions.sql:/docker-entrypoint-initdb.d/03-permissions.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledger"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  ledger:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ARE_LEDGER_DB_CONNECTION_STRING: "host=postgres port=5432 user=ledger password=ledger dbname=ledger sslmode=disable"
+      ARE_LEDGER_GRPC_PORT: "19092"
+      ARE_LEDGER_HEALTH_PORT: "8080"
+      ARE_LEDGER_METRICS_PORT: "8083"
+      ARE_LEDGER_KAFKA_BOOTSTRAP_SERVERS: "unused"
+      ARE_LEDGER_KAFKA_SASL_USERNAME: "unused"
+      ARE_LEDGER_KAFKA_SASL_PASSWORD: "unused"
+    ports:
+      - "19092:19092"
+      - "8080:8080"
+      - "8083:8083"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/readyz || exit 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 10

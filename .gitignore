@@ -1,0 +1,8 @@
+target/
+*.pyc
+__pycache__/
+sdks/python/generated/
+*.egg-info/
+.env
+reports/
+node_modules/
