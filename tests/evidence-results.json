@@ -1,8 +1,8 @@
 {
-  "timestamp": 1782848864653,
+  "timestamp": 1782849250195,
   "endpoint": "localhost:19292",
-  "total": 22,
-  "green": 22,
+  "total": 47,
+  "green": 47,
   "red": 0,
   "results": [
     {
@@ -30,8 +30,32 @@
       "detail": ""
     },
     {
+      "id": "L1.06",
+      "desc": "Hash is deterministic (same input produces same hash)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.07",
+      "desc": "Chain linkage: previous_hash is included in entry_hash",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
       "id": "L1.08",
       "desc": "First entry uses genesis hash",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.09",
+      "desc": "Database rejects UPDATE on ledger_entries",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.10",
+      "desc": "Database rejects DELETE on ledger_entries",
       "status": "GREEN",
       "detail": ""
     },
@@ -42,14 +66,32 @@
       "detail": ""
     },
     {
+      "id": "L2.02",
+      "desc": "VerifyEntry detects tampered content",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
       "id": "L2.03",
       "desc": "VerifyChain on valid chain returns chain_valid=true",
       "status": "GREEN",
       "detail": ""
     },
     {
+      "id": "L2.05",
+      "desc": "VerifyChain reports accurate entries_checked count",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
       "id": "L2.06",
       "desc": "GetChainTip returns latest entry",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L2.07",
+      "desc": "VerifyChain on empty/nonexistent chain",
       "status": "GREEN",
       "detail": ""
     },
@@ -66,6 +108,18 @@
       "detail": ""
     },
     {
+      "id": "L3.03",
+      "desc": "QueryEntries by source_id returns only that source",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L3.04",
+      "desc": "QueryEntries by entry_type prefix returns matching entries",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
       "id": "L3.07",
       "desc": "Multiple sources write concurrently without corruption",
       "status": "GREEN",
@@ -74,6 +128,12 @@
     {
       "id": "L4.01",
       "desc": "Three different agent_id formats coexist",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L4.02",
+      "desc": "Query by one agent_id does not return others",
       "status": "GREEN",
       "detail": ""
     },
@@ -102,6 +162,36 @@
       "detail": ""
     },
     {
+      "id": "L5.04",
+      "desc": "metadata.uid extracted as agent_id",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.05",
+      "desc": "unmapped.request_id extracted as correlation_id",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.06",
+      "desc": "Raw OCSF JSON preserved as content bytes",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.07",
+      "desc": "Malformed JSON line skipped without crash",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.08",
+      "desc": "Non-OCSF JSON line skipped",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
       "id": "L6.01",
       "desc": "Valid OTLP span produces correct entry_type",
       "status": "GREEN",
@@ -120,8 +210,32 @@
       "detail": ""
     },
     {
+      "id": "L6.04",
+      "desc": "resource.attributes.service.name extracted as agent_id",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.05",
+      "desc": "traceId extracted as correlation_id",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
       "id": "L6.06",
       "desc": "OTLP resourceSpans envelope parsed correctly",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.07",
+      "desc": "Flat span JSON parsed correctly",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.08",
+      "desc": "Malformed JSON skipped without crash",
       "status": "GREEN",
       "detail": ""
     },
@@ -134,6 +248,42 @@
     {
       "id": "L8.02",
       "desc": "trace-aaa correlates Kagenti + OpenShell",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L8.03",
+      "desc": "trace-bbb correlates tool call + network deny",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L8.05",
+      "desc": "Three independent chains verify clean after sample load",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L8.06",
+      "desc": "Standalone agent chain is independent",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L10.03",
+      "desc": "Large content (up to 1 MiB) accepted",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L10.04",
+      "desc": "Oversized content rejected",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L10.05",
+      "desc": "Chains survive ledger restart",
       "status": "GREEN",
       "detail": ""
     }
