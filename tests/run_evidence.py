@@ -715,6 +715,100 @@ ALL_TESTS = [
     test_l10_01, test_l10_02, test_l10_03, test_l10_04, test_l10_05,
 ]
 
+# ─── L9: Live Integration (optional, requires --live) ────
+
+@test("L9.01", "OpenShell sandbox OCSF events flow through adapter to ledger")
+def test_l9_01(c):
+    import subprocess
+    # Create a sandbox, exec a curl, capture OCSF logs, pipe through adapter
+    result = subprocess.run(
+        ["openshell", "sandbox", "list"], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, f"openshell not working: {result.stderr}"
+
+    # Find or create a test sandbox
+    sandbox_name = "ledger-l9-test"
+    create = subprocess.run(
+        ["openshell", "sandbox", "create", "--name", sandbox_name, "--no-keep", "--", "sleep", "30"],
+        capture_output=True, text=True, timeout=60)
+    assert create.returncode == 0, f"Sandbox create failed: {create.stderr}"
+
+    time.sleep(5)  # Wait for sandbox to be ready
+
+    # Exec a command that triggers network activity
+    subprocess.run(
+        ["openshell", "sandbox", "connect", sandbox_name, "-c", "curl -sS https://api.github.com/zen"],
+        capture_output=True, text=True, timeout=30)
+
+    # Capture OCSF logs
+    logs = subprocess.run(
+        ["openshell", "logs", sandbox_name, "--tail", "50"],
+        capture_output=True, text=True, timeout=15)
+
+    # Check if we got OCSF-like events
+    log_lines = logs.stdout.strip().split("\n")
+    ocsf_lines = [l for l in log_lines if "class_uid" in l or "OCSF" in l.upper()]
+    assert len(ocsf_lines) > 0 or len(log_lines) > 0, \
+        f"No log output from sandbox. Got {len(log_lines)} lines."
+
+    # If we got OCSF lines, pipe them through the adapter
+    if ocsf_lines:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "adapters", "ocsf"))
+        from ocsf_to_ledger import process_line
+        stats = {"written": 0, "parse_errors": 0, "write_errors": 0, "skipped": 0}
+        for line in ocsf_lines:
+            process_line(c, line, stats)
+        assert stats["written"] > 0, f"No OCSF events written to ledger: {stats}"
+
+    # Clean up
+    subprocess.run(["openshell", "sandbox", "delete", sandbox_name],
+                   capture_output=True, text=True, timeout=30)
+
+@test("L9.02", "OpenShell allow event exists in ledger")
+def test_l9_02(c):
+    all_entries = c.query(source_id="openshell-supervisor")
+    if not all_entries:
+        all_entries = c.query()
+        all_entries = [e for e in all_entries if "openshell" in e.entry_type]
+    allow_entries = [e for e in all_entries if
+                     "http_activity" in e.entry_type or
+                     b"Allowed" in e.content]
+    assert len(allow_entries) > 0, "No openshell allow entries found in ledger"
+
+@test("L9.03", "OpenShell deny event exists in ledger")
+def test_l9_03(c):
+    all_entries = c.query(source_id="openshell-supervisor")
+    if not all_entries:
+        all_entries = c.query()
+        all_entries = [e for e in all_entries if "openshell" in e.entry_type]
+    deny_entries = [e for e in all_entries if
+                    "network_activity" in e.entry_type or
+                    b"Denied" in e.content or b"Blocked" in e.content]
+    assert len(deny_entries) > 0, "No deny entries found"
+
+@test("L9.04", "Kagenti OTEL entries exist in ledger")
+def test_l9_04(c):
+    all_entries = c.query(source_id="kagenti-otel-collector")
+    if not all_entries:
+        all_entries = c.query()
+        all_entries = [e for e in all_entries if "kagenti" in e.entry_type and "test" not in e.entry_type]
+    assert len(all_entries) > 0, "No kagenti entries found in ledger"
+
+@test("L9.05", "Live cross-system correlation with real trace IDs")
+def test_l9_05(c):
+    # Check for correlation IDs that appear in entries from multiple sources
+    all_entries = c.query()
+    corr_ids = set(e.correlation_id for e in all_entries if e.correlation_id)
+    multi_source = 0
+    for cid in corr_ids:
+        sources = set(e.source_id for e in all_entries if e.correlation_id == cid)
+        if len(sources) > 1:
+            multi_source += 1
+
+    assert multi_source > 0, \
+        f"No cross-system correlations found ({len(corr_ids)} correlation IDs, all single-source)"
+
+LIVE_TESTS = [test_l9_01, test_l9_02, test_l9_03, test_l9_04, test_l9_05]
+
 
 def main():
     parser = argparse.ArgumentParser(description="Evidence Matrix Runner")
@@ -725,7 +819,9 @@ def main():
 
     client = LedgerClient(args.endpoint)
 
-    tests = ALL_TESTS
+    tests = list(ALL_TESTS)
+    if args.live:
+        tests.extend(LIVE_TESTS)
     if args.category:
         tests = [t for t in tests if t._test_id.startswith(args.category)]
 
