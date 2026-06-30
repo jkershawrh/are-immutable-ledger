@@ -314,7 +314,7 @@ def cmd_drift(args, client):
 
 def main():
     parser = argparse.ArgumentParser(description="Proof Explorer — query, verify, and analyze the immutable ledger")
-    parser.add_argument("--endpoint", default="localhost:19092", help="Ledger gRPC endpoint")
+    parser.add_argument("--endpoint", default="localhost:19292", help="Ledger gRPC endpoint")
     sub = parser.add_subparsers(dest="command", required=True)
 
     q = sub.add_parser("query", help="Query ledger entries")

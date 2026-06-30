@@ -19,7 +19,7 @@ TRACE_ID = "demo-trace-standalone-001"
 
 
 def main():
-    client = LedgerClient("localhost:19092")
+    client = LedgerClient("localhost:19292")
 
     events = [
         {

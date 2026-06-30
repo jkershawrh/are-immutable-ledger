@@ -54,7 +54,7 @@ docker compose up -d --build 2>&1 | tail -5
 echo ""
 echo "  Waiting for ledger to be ready..."
 until curl -sf http://localhost:18080/readyz > /dev/null 2>&1; do sleep 1; done
-echo -e "  ${GREEN}Ledger ready on gRPC :19092${RESET}"
+echo -e "  ${GREEN}Ledger ready on gRPC :19292${RESET}"
 pause
 
 # ═══════════════════════════════════════════════════════════

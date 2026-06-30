@@ -1,0 +1,141 @@
+{
+  "timestamp": 1782848864653,
+  "endpoint": "localhost:19292",
+  "total": 22,
+  "green": 22,
+  "red": 0,
+  "results": [
+    {
+      "id": "L1.01",
+      "desc": "WriteEntry stores entry and returns hash",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.02",
+      "desc": "Same idempotency_key returns same entry_id",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.04",
+      "desc": "GetEntry retrieves written entry with all fields",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.05",
+      "desc": "Consecutive writes produce incrementing chain_position",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.08",
+      "desc": "First entry uses genesis hash",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L2.01",
+      "desc": "VerifyEntry on valid entry returns both valid",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L2.03",
+      "desc": "VerifyChain on valid chain returns chain_valid=true",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L2.06",
+      "desc": "GetChainTip returns latest entry",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L3.01",
+      "desc": "QueryEntries by agent_id returns only that agent",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L3.02",
+      "desc": "QueryEntries by correlation_id returns entries from multiple sources",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L3.07",
+      "desc": "Multiple sources write concurrently without corruption",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L4.01",
+      "desc": "Three different agent_id formats coexist",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L4.03",
+      "desc": "Same correlation_id links entries with different agent_ids",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.01",
+      "desc": "Valid OCSF JSONL line produces ledger entry",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.02",
+      "desc": "class_uid 4001 maps to openshell.network_activity",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.03",
+      "desc": "class_uid 4002 maps to openshell.http_activity",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.01",
+      "desc": "Valid OTLP span produces correct entry_type",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.02",
+      "desc": "Span name tools/call maps correctly",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.03",
+      "desc": "Span name llm.request maps correctly",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.06",
+      "desc": "OTLP resourceSpans envelope parsed correctly",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L8.01",
+      "desc": "Sample data loads 11 entries across 3 sources",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L8.02",
+      "desc": "trace-aaa correlates Kagenti + OpenShell",
+      "status": "GREEN",
+      "detail": ""
+    }
+  ]
+}
