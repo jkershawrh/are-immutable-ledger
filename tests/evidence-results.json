@@ -1,9 +1,9 @@
 {
-  "timestamp": 1782853434941,
+  "timestamp": 1782854669618,
   "endpoint": "localhost:19292",
   "total": 60,
-  "green": 59,
-  "red": 1,
+  "green": 60,
+  "red": 0,
   "results": [
     {
       "id": "L1.01",
@@ -338,8 +338,8 @@
     {
       "id": "L9.01",
       "desc": "OpenShell sandbox OCSF events flow through adapter to ledger",
-      "status": "RED",
-      "detail": "openshell not working: Error:   \u00d7 No active gateway.\n  \u2502 Set one with: openshell gateway select <name>\n  \u2502 Or register one with: openshell gateway add <endpoint>\n\n"
+      "status": "GREEN",
+      "detail": ""
     },
     {
       "id": "L9.02",
