@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: ledger
       POSTGRES_DB: ledger
     ports:
-      - "54329:5432"
+      - "54330:5432"
     volumes:
       - ../migrations/001_init.sql:/docker-entrypoint-initdb.d/01-init.sql
       - ../migrations/002_correlation_id_text.sql:/docker-entrypoint-initdb.d/02-correlation-id.sql
@@ -34,8 +34,8 @@ services:
       ARE_LEDGER_KAFKA_SASL_PASSWORD: "unused"
     ports:
       - "19092:19092"
-      - "8080:8080"
-      - "8083:8083"
+      - "18080:8080"
+      - "18083:8083"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/readyz || exit 1"]
       interval: 3s
