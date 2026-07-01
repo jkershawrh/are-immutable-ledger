@@ -220,7 +220,7 @@ export default function App() {
                   </div>
                   <ClosingPoint text="One gRPC call. Your identity. Your event format. Chained and verifiable." />
                   <ClosingPoint text="No shared identity registry required. No event format standardization." />
-                  <ClosingPoint text="Any agentic system plugs in. OpenShell, Kagenti, ARE, or the 30-line Python script you write in 5 minutes." />
+                  <ClosingPoint text="Any agentic system plugs in. OpenShell, Kagenti, governance services, or the 30-line Python script you write in 5 minutes." />
                 </div>
 
                 <div className="card" style={{ marginBottom: 24, borderColor: 'var(--purple-border)' }}>

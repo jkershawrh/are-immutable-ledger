@@ -26,7 +26,17 @@ export function TimelineView() {
   if (loading) return <div style={{ padding: 32, color: 'var(--text-dim)' }}>Loading timeline...</div>
   if (!data) return null
 
-  const entries = data.entries.filter(e => !e.entry_type.startsWith('test.'))
+  const entries = data.entries.filter(e =>
+    !e.entry_type.startsWith('test.') &&
+    !e.entry_type.startsWith('test\'') &&
+    !e.entry_type.startsWith('are.') &&
+    !e.source_id.startsWith('evidence') &&
+    !e.source_id.startsWith('stress') &&
+    !e.source_id.startsWith('flood') &&
+    !e.source_id.startsWith('large') &&
+    !e.source_id.startsWith('source-') &&
+    !e.source_id.startsWith('other-')
+  )
   const correlations = data.correlations
 
   const multiSourceCorr = Object.entries(correlations).filter(([, ids]) => {
