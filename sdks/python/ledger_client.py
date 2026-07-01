@@ -26,7 +26,7 @@ class LedgerClient:
         return method(request)
 
     def write(self, entry_type, agent_id, content, *, content_type="application/json",
-              source_id="", correlation_id="", idempotency_key=""):
+              source_id="", correlation_id="", idempotency_key="", input_hash=""):
         if isinstance(content, str):
             content = content.encode("utf-8")
         if not idempotency_key:
@@ -39,6 +39,7 @@ class LedgerClient:
             source_id=source_id,
             correlation_id=correlation_id,
             idempotency_key=idempotency_key,
+            input_hash=input_hash,
         )
         return self._call(self.stub.WriteEntry, req)
 
@@ -74,7 +75,7 @@ class LedgerClient:
         return self._call(self.stub.GetChainTip, pb.GetChainTipRequest(entry_type=entry_type))
 
     def issue_receipt(self, entry_type, agent_id, content, *, content_type="application/json",
-                      source_id="", correlation_id="", idempotency_key=""):
+                      source_id="", correlation_id="", idempotency_key="", input_hash=""):
         if isinstance(content, str):
             content = content.encode("utf-8")
         if not idempotency_key:
@@ -83,6 +84,7 @@ class LedgerClient:
             entry_type=entry_type, agent_id=agent_id, content=content,
             content_type=content_type, source_id=source_id,
             correlation_id=correlation_id, idempotency_key=idempotency_key,
+            input_hash=input_hash,
         )
         return self._call(self.stub.IssueReceipt, req)
 

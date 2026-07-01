@@ -43,6 +43,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
                 source_id: input.source_id,
                 correlation_id: empty_to_none(input.correlation_id),
                 idempotency_key: empty_to_none(input.idempotency_key),
+                input_hash: empty_to_none(input.input_hash),
             })
             .await
             .map_err(map_err)?;
@@ -74,6 +75,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
                 chain_position: entry.chain_position,
                 written_ts: entry.written_ts.timestamp_millis(),
                 idempotency_key: entry.idempotency_key.unwrap_or_default(),
+                input_hash: entry.input_hash.unwrap_or_default(),
             }),
         }))
     }
@@ -121,6 +123,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
                     chain_position: entry.chain_position,
                     written_ts: entry.written_ts.timestamp_millis(),
                     idempotency_key: entry.idempotency_key.unwrap_or_default(),
+                input_hash: entry.input_hash.unwrap_or_default(),
                 })
                 .collect(),
             next_page_token: next_token.unwrap_or_default(),
@@ -220,6 +223,11 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
             } else {
                 Some(input.idempotency_key.clone())
             },
+            input_hash: if input.input_hash.is_empty() {
+                None
+            } else {
+                Some(input.input_hash.clone())
+            },
         };
         let receipt = self.service.issue_receipt(write_input).await.map_err(map_err)?;
         Ok(Response::new(pb::ProofReceipt {
@@ -228,6 +236,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
             chain_position: receipt.chain_position,
             written_ts: receipt.written_ts_ms,
             entry_id: receipt.entry_id.to_string(),
+            input_hash: receipt.input_hash,
         }))
     }
 
@@ -258,6 +267,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
                 chain_position: entry.chain_position,
                 written_ts: entry.written_ts.timestamp_millis(),
                 idempotency_key: entry.idempotency_key.unwrap_or_default(),
+                input_hash: entry.input_hash.unwrap_or_default(),
             }),
         }))
     }
@@ -285,6 +295,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
             source_id: output.source_id,
             correlation_id: output.correlation_id,
             content_type: output.content_type,
+            input_hash: output.input_hash,
         }))
     }
 }
