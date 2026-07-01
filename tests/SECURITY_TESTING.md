@@ -15,7 +15,9 @@
 | L10: Resilience | 5 | Concurrent stress, restart survival, content limits |
 | **L11: Security** | **10** | **SQL injection, null bytes, unicode, field validation, DB permissions, data leakage** |
 | **L12: Adversarial** | **8** | **Write flood, query flood, large payload flood, forged entries, deletion detection, replay attacks, cross-chain isolation** |
+| **L13: Kagenti Live** | **5** | **OTEL collector health, agent traces captured, traceIds preserved, chains verified** |
 | **L14: Synthetic** | **4** | **Multi-system lifecycle, concurrent agents, long chains, timeline reconstruction** |
+| **L15: Cross-System** | **5** | **Both sources coexist, trace ID joins both, timeline interleaves, chains independent, drift detectable** |
 
 ## Attack Surface Coverage
 
