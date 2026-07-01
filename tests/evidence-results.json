@@ -1,49 +1,79 @@
 {
-  "timestamp": 1782918693850,
+  "timestamp": 1782918857462,
   "endpoint": "localhost:19292",
-  "total": 7,
-  "green": 7,
+  "total": 12,
+  "green": 12,
   "red": 0,
   "results": [
     {
-      "id": "L16.01",
-      "desc": "IssueReceipt returns compact ProofReceipt",
+      "id": "L17.01",
+      "desc": "Forged receipt hash rejected \u2014 can't fabricate proof",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L16.02",
-      "desc": "VerifyProof with valid hash returns valid=true",
+      "id": "L17.02",
+      "desc": "Receipt for wrong entry_type rejected \u2014 can't cross-type verify",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L16.03",
-      "desc": "VerifyProof with unknown hash returns not found",
+      "id": "L17.03",
+      "desc": "Replayed old receipt detected via timestamp staleness",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L16.04",
-      "desc": "VerifyProof with tampered entry returns invalid",
+      "id": "L17.04",
+      "desc": "Receipt content swap detected \u2014 change content, hash still finds original",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L16.05",
-      "desc": "Receipt round-trip: issue \u2192 encode \u2192 decode \u2192 verify",
+      "id": "L17.05",
+      "desc": "Receipt agent_id swap detected \u2014 can't claim different issuer",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L16.06",
-      "desc": "Multiple receipts for same correlation_id form chain of trust",
+      "id": "L17.06",
+      "desc": "Receipt correlation_id swap detected \u2014 can't rebind to different request",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L16.07",
-      "desc": "Receipt from one source verifiable by another",
+      "id": "L17.07",
+      "desc": "Duplicate receipt issuance with same idempotency_key returns same receipt",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.08",
+      "desc": "Receipt with conflicting idempotency_key rejected",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.09",
+      "desc": "Empty receipt fields rejected",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.10",
+      "desc": "Verify with empty hash/type rejected",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.11",
+      "desc": "Receipt SQL injection via entry_type blocked",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.12",
+      "desc": "Receipt flood doesn't crash service",
       "status": "GREEN",
       "detail": ""
     }

@@ -1366,12 +1366,194 @@ def test_l16_07(c):
     assert v.agent_id == "authbridge-proxy", "Should see the original issuer"
 
 
+# ─── L17: Proof Receipt Security & Adversarial ───────────
+
+@test("L17.01", "Forged receipt hash rejected — can't fabricate proof")
+def test_l17_01(c):
+    import grpc
+    # Attacker knows the entry_type but fabricates a hash
+    fake_hash = hashlib.sha256(b"forged-guardrail-result").hexdigest()
+    try:
+        v = c.verify_proof(fake_hash, "authbridge.guardrail")
+        # If it returns (no error), valid must be false or it's a real collision (astronomically unlikely)
+        assert not v.valid, "Fabricated hash should not verify as valid"
+    except grpc.RpcError as e:
+        assert e.code() == grpc.StatusCode.NOT_FOUND, f"Expected NOT_FOUND, got {e.code()}"
+
+@test("L17.02", "Receipt for wrong entry_type rejected — can't cross-type verify")
+def test_l17_02(c):
+    import grpc
+    etype = f"test.l17.wrongtype.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "agent-l17",
+        json.dumps({"guardrail": "clean"}), source_id="test")
+    # Try to verify the hash against a DIFFERENT entry_type
+    try:
+        v = c.verify_proof(receipt.entry_hash, "totally.different.type")
+        assert not v.valid, "Hash should not verify against wrong entry_type"
+    except grpc.RpcError as e:
+        assert e.code() == grpc.StatusCode.NOT_FOUND
+
+@test("L17.03", "Replayed old receipt detected via timestamp staleness")
+def test_l17_03(c):
+    import time as t
+    etype = f"test.l17.replay.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "agent-l17",
+        json.dumps({"guardrail": "clean", "ts": "old"}), source_id="test")
+    t.sleep(1)
+    # Verifier checks freshness — receipt is valid but written_ts is stale
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid, "Receipt should verify (integrity is fine)"
+    now_ms = int(t.time() * 1000)
+    age_ms = now_ms - v.written_ts
+    assert age_ms > 500, f"Receipt should show age — got {age_ms}ms"
+    # Downstream service would reject if age_ms > their freshness threshold
+
+@test("L17.04", "Receipt content swap detected — change content, hash still finds original")
+def test_l17_04(c):
+    import subprocess
+    etype = f"test.l17.swap.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "agent-l17",
+        json.dumps({"guardrail": "pii_scan", "result": "clean"}), source_id="test")
+    # Attacker swaps content to claim a DIFFERENT guardrail passed
+    swapped = json.dumps({"guardrail": "toxicity", "result": "clean"})
+    sql = f"UPDATE are_ledger.ledger_entries SET content='{swapped}'::bytea WHERE entry_hash='{receipt.entry_hash}' AND entry_type='{etype}';"
+    subprocess.run(
+        ["/opt/podman/bin/podman", "exec", "demo_postgres_1", "psql", "-U", "ledger", "-d", "ledger", "-c", sql],
+        capture_output=True, text=True, timeout=10)
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert not v.valid, "Content swap should break hash verification"
+
+@test("L17.05", "Receipt agent_id swap detected — can't claim different issuer")
+def test_l17_05(c):
+    import subprocess
+    etype = f"test.l17.agentswap.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "real-authbridge",
+        json.dumps({"validated": True}), source_id="authbridge")
+    # Attacker changes agent_id to impersonate a more trusted issuer
+    subprocess.run(
+        ["/opt/podman/bin/podman", "exec", "demo_postgres_1", "psql", "-U", "ledger", "-d", "ledger", "-c",
+         f"UPDATE are_ledger.ledger_entries SET agent_id='premium-authbridge' "
+         f"WHERE entry_hash='{receipt.entry_hash}' AND entry_type='{etype}';"],
+        capture_output=True, text=True, timeout=10)
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert not v.valid, "Agent ID swap should break hash verification"
+
+@test("L17.06", "Receipt correlation_id swap detected — can't rebind to different request")
+def test_l17_06(c):
+    import subprocess
+    etype = f"test.l17.corrswap.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "agent-l17",
+        json.dumps({"validated": True}),
+        source_id="test", correlation_id="original-trace-id")
+    # Attacker changes correlation_id to bind this receipt to a different request
+    subprocess.run(
+        ["/opt/podman/bin/podman", "exec", "demo_postgres_1", "psql", "-U", "ledger", "-d", "ledger", "-c",
+         f"UPDATE are_ledger.ledger_entries SET correlation_id='hijacked-trace-id' "
+         f"WHERE entry_hash='{receipt.entry_hash}' AND entry_type='{etype}';"],
+        capture_output=True, text=True, timeout=10)
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert not v.valid, "Correlation ID swap should break hash verification"
+
+@test("L17.07", "Duplicate receipt issuance with same idempotency_key returns same receipt")
+def test_l17_07(c):
+    etype = f"test.l17.dupe.{uuid.uuid4().hex[:8]}"
+    idem = f"idem-{uuid.uuid4().hex[:8]}"
+    r1 = c.issue_receipt(etype, "agent-l17",
+        json.dumps({"guardrail": "check1"}),
+        source_id="test", idempotency_key=idem)
+    r2 = c.issue_receipt(etype, "agent-l17",
+        json.dumps({"guardrail": "check1"}),
+        source_id="test", idempotency_key=idem)
+    assert r1.entry_hash == r2.entry_hash, "Same idempotency key should return same receipt"
+    assert r1.entry_id == r2.entry_id, "Same entry_id for idempotent receipt"
+
+@test("L17.08", "Receipt with conflicting idempotency_key rejected")
+def test_l17_08(c):
+    import grpc
+    etype = f"test.l17.conflict.{uuid.uuid4().hex[:8]}"
+    idem = f"idem-{uuid.uuid4().hex[:8]}"
+    c.issue_receipt(etype, "agent-l17",
+        json.dumps({"guardrail": "check1"}),
+        source_id="test", idempotency_key=idem)
+    try:
+        c.issue_receipt(etype, "agent-l17",
+            json.dumps({"guardrail": "DIFFERENT-check"}),
+            source_id="test", idempotency_key=idem)
+        assert False, "Should reject conflicting idempotency key"
+    except grpc.RpcError as e:
+        assert e.code() == grpc.StatusCode.ALREADY_EXISTS, f"Expected ALREADY_EXISTS, got {e.code()}"
+
+@test("L17.09", "Empty receipt fields rejected")
+def test_l17_09(c):
+    import grpc
+    try:
+        c.issue_receipt("", "agent-l17",
+            json.dumps({"guardrail": "check"}), source_id="test")
+        assert False, "Empty entry_type should be rejected"
+    except grpc.RpcError as e:
+        assert e.code() == grpc.StatusCode.INVALID_ARGUMENT
+
+@test("L17.10", "Verify with empty hash/type rejected")
+def test_l17_10(c):
+    import grpc
+    try:
+        c.verify_proof("", "some.type")
+        assert False, "Empty hash should be rejected"
+    except grpc.RpcError as e:
+        assert e.code() == grpc.StatusCode.INVALID_ARGUMENT
+    try:
+        c.verify_proof("somehash", "")
+        assert False, "Empty entry_type should be rejected"
+    except grpc.RpcError as e:
+        assert e.code() == grpc.StatusCode.INVALID_ARGUMENT
+
+@test("L17.11", "Receipt SQL injection via entry_type blocked")
+def test_l17_11(c):
+    malicious = "'; DROP TABLE are_ledger.ledger_entries; --"
+    receipt = c.issue_receipt(malicious, "agent-l17",
+        json.dumps({"injection": True}), source_id="test")
+    assert receipt.entry_hash, "Should store literally"
+    v = c.verify_proof(receipt.entry_hash, malicious)
+    assert v.valid, "Injected entry_type should verify (stored literally)"
+    # Table still exists
+    all_entries = c.query()
+    assert len(all_entries) > 0, "Table should still exist after injection attempt"
+
+@test("L17.12", "Receipt flood doesn't crash service")
+def test_l17_12(c):
+    import threading
+    etype_base = f"test.l17.flood.{uuid.uuid4().hex[:8]}"
+    success = [0]
+    lock = threading.Lock()
+
+    def issuer(idx):
+        try:
+            for i in range(20):
+                c.issue_receipt(f"{etype_base}.t{idx}", f"agent-{idx}",
+                    json.dumps({"i": i}), source_id=f"flood-{idx}")
+                with lock:
+                    success[0] += 1
+        except Exception:
+            pass
+
+    threads = [threading.Thread(target=issuer, args=(i,)) for i in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+
+    assert success[0] >= 80, f"Expected 80+ receipts, got {success[0]}"
+
+
 LIVE_TESTS = [
     test_l9_01, test_l9_02, test_l9_03, test_l9_04, test_l9_05,
     test_l13_01, test_l13_02, test_l13_03, test_l13_04, test_l13_05,
     test_l15_01, test_l15_02, test_l15_03, test_l15_04, test_l15_05,
     test_l16_01, test_l16_02, test_l16_03, test_l16_04, test_l16_05,
     test_l16_06, test_l16_07,
+    test_l17_01, test_l17_02, test_l17_03, test_l17_04, test_l17_05,
+    test_l17_06, test_l17_07, test_l17_08, test_l17_09, test_l17_10,
+    test_l17_11, test_l17_12,
 ]
 
 
