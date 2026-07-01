@@ -1,8 +1,8 @@
 {
-  "timestamp": 1782854669618,
+  "timestamp": 1782865866227,
   "endpoint": "localhost:19292",
-  "total": 60,
-  "green": 60,
+  "total": 82,
+  "green": 82,
   "red": 0,
   "results": [
     {
@@ -332,6 +332,138 @@
     {
       "id": "L10.05",
       "desc": "Chains survive ledger restart",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.01",
+      "desc": "Chain tip tampering: next write recovers or fails safely",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.02",
+      "desc": "Outbox modification doesn't affect chain integrity",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.03",
+      "desc": "SQL injection via entry_type field blocked",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.04",
+      "desc": "SQL injection via agent_id field blocked",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.05",
+      "desc": "Null bytes in content handled safely",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.06",
+      "desc": "Unicode in all string fields handled correctly",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.07",
+      "desc": "Empty required fields rejected",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.08",
+      "desc": "Health endpoint doesn't leak sensitive data",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.09",
+      "desc": "Direct DB INSERT requires correct hash (no service bypass)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.10",
+      "desc": "Metrics endpoint doesn't leak entry content",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.01",
+      "desc": "Write flood doesn't crash service (1000 writes across 10 chains)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.02",
+      "desc": "Query flood doesn't crash service (50 sequential queries)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.03",
+      "desc": "Large payload flood (50 x 500KB)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.05",
+      "desc": "Forged entry detected by VerifyChain",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.06",
+      "desc": "Entry deletion detected by VerifyChain",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.07",
+      "desc": "Duplicate chain_position rejected by DB constraint",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.08",
+      "desc": "Cross-chain contamination impossible",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.10",
+      "desc": "Default credentials documented",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L14.01",
+      "desc": "Model promotion lifecycle across 3 systems",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L14.02",
+      "desc": "5-agent concurrent session (50 entries)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L14.03",
+      "desc": "Long chain stress (200 entries)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L14.05",
+      "desc": "Cross-system timeline reconstruction (50 events, 5 sources)",
       "status": "GREEN",
       "detail": ""
     },
