@@ -2,7 +2,7 @@
 """Load sample cross-system events into the ledger.
 
 Tells the story of a model promotion agent:
-- ARE authorizes it (passport, scope, policy)
+- Governance authorizes it (passport, scope, policy)
 - Kagenti deploys and orchestrates it (agent lifecycle, tool calls, LLM)
 - OpenShell sandboxes it (network allow/deny, sandbox lifecycle)
 
@@ -21,11 +21,11 @@ BASE_TS = int(time.time() * 1000)
 
 
 EVENTS = [
-    # --- ARE Foundation authority decisions ---
+    # --- Governance authority decisions ---
     {
         "entry_type": "are.agent.registered",
         "agent_id": "agt-demo-001",
-        "source_id": "are-foundation",
+        "source_id": "governance-service",
         "correlation_id": "session-demo-001",
         "content_type": "application/json",
         "content": {
@@ -38,7 +38,7 @@ EVENTS = [
     {
         "entry_type": "are.passport.issued",
         "agent_id": "agt-demo-001",
-        "source_id": "are-foundation",
+        "source_id": "governance-service",
         "correlation_id": "session-demo-001",
         "content_type": "application/json",
         "content": {
@@ -55,7 +55,7 @@ EVENTS = [
     {
         "entry_type": "are.scope.evaluated",
         "agent_id": "agt-demo-001",
-        "source_id": "are-foundation",
+        "source_id": "governance-service",
         "correlation_id": "session-demo-001",
         "content_type": "application/json",
         "content": {

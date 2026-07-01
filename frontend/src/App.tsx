@@ -126,7 +126,7 @@ export default function App() {
                 <div style={{ maxWidth: 700 }}>
                   <StoryStep num="1" text="OpenShell sandboxes agents and logs OCSF security events — network allows, denials, process launches. The logs go to JSONL files. They can be edited. They can be deleted." />
                   <StoryStep num="2" text="Kagenti orchestrates agent fleets and captures OTEL traces — tool calls, LLM requests, agent lifecycle. The traces go to Phoenix or Jaeger. They can be overwritten." />
-                  <StoryStep num="3" text="ARE Foundation evaluates authority — passports, scoped permissions, policy decisions. The decisions are checked but not chained. There's no proof they weren't altered after the fact." />
+                  <StoryStep num="3" text="Governance systems evaluate authority — passports, scoped permissions, policy decisions. The decisions are checked but not chained. There's no proof they weren't altered after the fact." />
                   <StoryStep num="4" text="When compliance asks 'show me verifiable proof of what this agent did across all three systems' — nobody has an answer. Observability is not proof. Logs are not evidence. That's the ordinary world." />
                 </div>
               </div>
@@ -200,7 +200,7 @@ export default function App() {
 
                 <p style={{ color: 'var(--text-secondary)', fontSize: 16, lineHeight: 1.7, marginBottom: 24 }}>
                   Everything you just saw was live. Real entries from real systems —
-                  OpenShell sandbox events, Kagenti OTEL traces, ARE Foundation authority decisions —
+                  OpenShell sandbox events, Kagenti OTEL traces, governance authority decisions —
                   all chained, all verified, all independently provable.
                 </p>
 
