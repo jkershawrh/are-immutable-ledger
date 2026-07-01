@@ -16,6 +16,8 @@ fn config() -> Arc<AppConfig> {
         kafka_sasl_username: "user".to_string(),
         kafka_sasl_password: "pass".to_string(),
         genesis_hash_input: "ARE_LEDGER_GENESIS".to_string(),
+        api_token: None,
+        shutdown_token: None,
     })
 }
 

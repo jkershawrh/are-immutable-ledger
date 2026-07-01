@@ -7,9 +7,12 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use serde_json::json;
 use thiserror::Error;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+
+use crate::crypto::{canonical_entry_hash, CanonicalEntryHashInput};
 
 #[derive(Debug, Clone)]
 pub struct LedgerEntryRecord {
@@ -60,6 +63,8 @@ pub enum RepositoryError {
     Unavailable,
     #[error("chain integrity violation")]
     ChainIntegrityViolation,
+    #[error("idempotency key conflict")]
+    IdempotencyConflict,
 }
 
 #[derive(Debug, Clone)]
@@ -77,10 +82,26 @@ pub struct EntryWriteInput {
     pub source_id: String,
     pub correlation_id: Option<String>,
     pub idempotency_key: Option<String>,
-    pub entry_hash: String,
     pub previous_hash: String,
     pub written_ts: DateTime<Utc>,
-    pub outbox_payload: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct EntryQuery {
+    pub entry_type_prefix: Option<String>,
+    pub agent_id: Option<String>,
+    pub source_id: Option<String>,
+    pub correlation_id: Option<String>,
+    pub from_ts_ms: Option<i64>,
+    pub to_ts_ms: Option<i64>,
+    pub limit: usize,
+    pub offset: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct QueryResult {
+    pub entries: Vec<LedgerEntryRecord>,
+    pub total_count: i64,
 }
 
 #[async_trait]
@@ -90,7 +111,7 @@ pub trait LedgerRepository: Send + Sync {
         input: EntryWriteInput,
     ) -> Result<WriteResult, RepositoryError>;
     async fn get_entry(&self, entry_id: Uuid) -> Result<LedgerEntryRecord, RepositoryError>;
-    async fn query_entries(&self) -> Result<Vec<LedgerEntryRecord>, RepositoryError>;
+    async fn query_entries(&self, query: EntryQuery) -> Result<QueryResult, RepositoryError>;
     async fn get_chain_tip(&self, entry_type: &str) -> Result<ChainTip, RepositoryError>;
     async fn get_entries_by_type(
         &self,
@@ -126,6 +147,14 @@ impl LedgerRepository for InMemoryLedgerRepository {
         input: EntryWriteInput,
     ) -> Result<WriteResult, RepositoryError> {
         let mut guard = self.inner.write().await;
+        if let Some(key) = &input.idempotency_key {
+            if guard
+                .idempotency_index
+                .contains_key(&(input.entry_type.clone(), key.clone()))
+            {
+                return Err(RepositoryError::IdempotencyConflict);
+            }
+        }
         let next_position = guard
             .chain_tips
             .get(&input.entry_type)
@@ -147,6 +176,28 @@ impl LedgerRepository for InMemoryLedgerRepository {
 
         let entry_id = Uuid::new_v4();
         let outbox_id = Uuid::new_v4();
+        let entry_hash = canonical_entry_hash(&CanonicalEntryHashInput {
+            entry_id,
+            entry_type: &input.entry_type,
+            agent_id: &input.agent_id,
+            content: &input.content,
+            content_type: &input.content_type,
+            source_id: &input.source_id,
+            correlation_id: input.correlation_id.as_deref(),
+            idempotency_key: input.idempotency_key.as_deref(),
+            chain_position: next_position,
+            written_ts_ms: input.written_ts.timestamp_millis(),
+            previous_hash: &input.previous_hash,
+        });
+        let outbox_payload = ledger_written_payload(
+            &entry_id,
+            &input.entry_type,
+            &input.agent_id,
+            &input.source_id,
+            &entry_hash,
+            input.correlation_id.as_deref(),
+            input.written_ts.timestamp_millis(),
+        );
         let entry = LedgerEntryRecord {
             entry_id,
             entry_type: input.entry_type.clone(),
@@ -156,7 +207,7 @@ impl LedgerRepository for InMemoryLedgerRepository {
             source_id: input.source_id,
             correlation_id: input.correlation_id,
             idempotency_key: input.idempotency_key.clone(),
-            entry_hash: input.entry_hash.clone(),
+            entry_hash: entry_hash.clone(),
             previous_hash: input.previous_hash,
             chain_position: next_position,
             written_ts: input.written_ts,
@@ -165,7 +216,7 @@ impl LedgerRepository for InMemoryLedgerRepository {
             outbox_id,
             entry_id,
             entry_type: input.entry_type.clone(),
-            payload: input.outbox_payload,
+            payload: outbox_payload,
             status: OutboxStatus::Pending,
             attempt_count: 0,
         };
@@ -180,7 +231,7 @@ impl LedgerRepository for InMemoryLedgerRepository {
             input.entry_type,
             ChainTip {
                 entry_id,
-                hash: input.entry_hash,
+                hash: entry_hash,
                 position: next_position,
                 written_ts: entry.written_ts,
             },
@@ -204,11 +255,21 @@ impl LedgerRepository for InMemoryLedgerRepository {
             .ok_or(RepositoryError::NotFound)
     }
 
-    async fn query_entries(&self) -> Result<Vec<LedgerEntryRecord>, RepositoryError> {
+    async fn query_entries(&self, query: EntryQuery) -> Result<QueryResult, RepositoryError> {
         let guard = self.inner.read().await;
         let mut values: Vec<LedgerEntryRecord> = guard.entries.values().cloned().collect();
+        apply_query_filters(&mut values, &query);
         values.sort_by_key(|entry| (entry.written_ts.timestamp_millis(), entry.chain_position));
-        Ok(values)
+        let total_count = values.len() as i64;
+        let entries = values
+            .into_iter()
+            .skip(query.offset)
+            .take(query.limit)
+            .collect();
+        Ok(QueryResult {
+            entries,
+            total_count,
+        })
     }
 
     async fn get_chain_tip(&self, entry_type: &str) -> Result<ChainTip, RepositoryError> {
@@ -273,6 +334,51 @@ impl LedgerRepository for InMemoryLedgerRepository {
     }
 }
 
+pub fn ledger_written_payload(
+    entry_id: &Uuid,
+    entry_type: &str,
+    agent_id: &str,
+    source_id: &str,
+    entry_hash: &str,
+    correlation_id: Option<&str>,
+    written_ts_ms: i64,
+) -> String {
+    json!({
+        "event_id": Uuid::new_v4().to_string(),
+        "event_type": "LEDGER_ENTRY_WRITTEN",
+        "entry_id": entry_id.to_string(),
+        "entry_type": entry_type,
+        "agent_id": agent_id,
+        "source_id": source_id,
+        "entry_hash": entry_hash,
+        "correlation_id": correlation_id,
+        "written_ts": written_ts_ms,
+        "schema_version": "1.0.0"
+    })
+    .to_string()
+}
+
+fn apply_query_filters(entries: &mut Vec<LedgerEntryRecord>, query: &EntryQuery) {
+    if let Some(filter) = query.entry_type_prefix.as_deref() {
+        entries.retain(|entry| entry.entry_type.starts_with(filter));
+    }
+    if let Some(filter) = query.agent_id.as_deref() {
+        entries.retain(|entry| entry.agent_id == filter);
+    }
+    if let Some(filter) = query.source_id.as_deref() {
+        entries.retain(|entry| entry.source_id == filter);
+    }
+    if let Some(filter) = query.correlation_id.as_deref() {
+        entries.retain(|entry| entry.correlation_id.as_deref() == Some(filter));
+    }
+    if let Some(from) = query.from_ts_ms {
+        entries.retain(|entry| entry.written_ts.timestamp_millis() >= from);
+    }
+    if let Some(to) = query.to_ts_ms {
+        entries.retain(|entry| entry.written_ts.timestamp_millis() <= to);
+    }
+}
+
 #[cfg(test)]
 impl InMemoryLedgerRepository {
     /// Corrupts a stored entry hash (tests only).
@@ -280,6 +386,16 @@ impl InMemoryLedgerRepository {
         let mut g = self.inner.write().await;
         if let Some(e) = g.entries.get_mut(&entry_id) {
             e.entry_hash = "tampered-hash".to_string();
+            return true;
+        }
+        false
+    }
+
+    /// Corrupts stored correlation metadata (tests only).
+    pub async fn test_corrupt_correlation_id(&self, entry_id: Uuid, correlation_id: &str) -> bool {
+        let mut g = self.inner.write().await;
+        if let Some(e) = g.entries.get_mut(&entry_id) {
+            e.correlation_id = Some(correlation_id.to_string());
             return true;
         }
         false
@@ -304,15 +420,13 @@ mod tests {
                 source_id: "source".to_string(),
                 correlation_id: None,
                 idempotency_key: Some("idem".to_string()),
-                entry_hash: "hash-1".to_string(),
                 previous_hash: "genesis".to_string(),
                 written_ts: Utc::now(),
-                outbox_payload: "{\"x\":1}".to_string(),
             })
             .await
             .expect("write");
         let fetched = repo.get_entry(result.entry.entry_id).await.expect("get");
-        assert_eq!(fetched.entry_hash, "hash-1");
+        assert!(!fetched.entry_hash.is_empty());
         let tip = repo.get_chain_tip("TYPE").await.expect("tip");
         assert_eq!(tip.position, 1);
         let pending = repo.pending_outbox().await.expect("outbox");
@@ -336,10 +450,8 @@ mod tests {
                 source_id: "source".to_string(),
                 correlation_id: None,
                 idempotency_key: None,
-                entry_hash: "hash-1".to_string(),
                 previous_hash: "genesis".to_string(),
                 written_ts: Utc::now(),
-                outbox_payload: "{}".to_string(),
             })
             .await
             .expect("first");
@@ -352,10 +464,8 @@ mod tests {
                 source_id: "source".to_string(),
                 correlation_id: None,
                 idempotency_key: None,
-                entry_hash: "hash-2".to_string(),
                 previous_hash: "wrong-prev".to_string(),
                 written_ts: Utc::now(),
-                outbox_payload: "{}".to_string(),
             })
             .await
             .expect_err("should fail");

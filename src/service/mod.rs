@@ -2,16 +2,15 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::Utc;
-use serde_json::json;
 use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::warn;
 use uuid::Uuid;
 
 use crate::config::AppConfig;
-use crate::crypto::{canonical_entry_hash, sha256_hex};
+use crate::crypto::{canonical_entry_hash, sha256_hex, CanonicalEntryHashInput};
 use crate::repository::{
-    EntryWriteInput, LedgerEntryRecord, LedgerRepository, OutboxRecord, RepositoryError,
+    EntryQuery, EntryWriteInput, LedgerEntryRecord, LedgerRepository, OutboxRecord, RepositoryError,
 };
 
 #[derive(Debug, Clone)]
@@ -67,6 +66,8 @@ pub enum ServiceError {
     NotFound,
     #[error("invalid argument: {0}")]
     InvalidArgument(String),
+    #[error("already exists: {0}")]
+    AlreadyExists(String),
     #[error("unavailable")]
     Unavailable,
     #[error("internal: {0}")]
@@ -174,6 +175,12 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
                 .await
                 .map_err(map_repo)?
             {
+                if !idempotent_request_matches(&existing, &input) {
+                    return Err(ServiceError::AlreadyExists(
+                        "idempotency_key already used with different entry content or metadata"
+                            .to_string(),
+                    ));
+                }
                 return Ok(WriteEntryOutput {
                     entry_id: existing.entry_id,
                     entry_hash: existing.entry_hash,
@@ -192,27 +199,6 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
                 Err(err) => return Err(map_repo(err)),
             };
             let written_ts = Utc::now();
-            let entry_hash = canonical_entry_hash(
-                &input.entry_type,
-                &input.agent_id,
-                &input.content,
-                &input.content_type,
-                &input.source_id,
-                written_ts.timestamp_millis(),
-                &previous_hash,
-            );
-            let outbox_payload = json!({
-                "event_id": Uuid::new_v4().to_string(),
-                "event_type": "LEDGER_ENTRY_WRITTEN",
-                "entry_type": input.entry_type,
-                "agent_id": input.agent_id,
-                "source_id": input.source_id,
-                "entry_hash": entry_hash,
-                "correlation_id": input.correlation_id,
-                "written_ts": written_ts.timestamp_millis(),
-                "schema_version": "1.0.0"
-            })
-            .to_string();
 
             match self
                 .repo
@@ -224,10 +210,8 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
                     source_id: input.source_id.clone(),
                     correlation_id: input.correlation_id.clone(),
                     idempotency_key: input.idempotency_key.clone(),
-                    entry_hash: entry_hash.clone(),
                     previous_hash,
                     written_ts,
-                    outbox_payload,
                 })
                 .await
             {
@@ -241,6 +225,28 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
                 }
                 Err(RepositoryError::ChainIntegrityViolation) if attempt < 4 => {
                     continue;
+                }
+                Err(RepositoryError::IdempotencyConflict) => {
+                    if let Some(key) = &input.idempotency_key {
+                        let existing = self
+                            .repo
+                            .find_idempotent(&input.entry_type, key)
+                            .await
+                            .map_err(map_repo)?
+                            .ok_or(ServiceError::Unavailable)?;
+                        if idempotent_request_matches(&existing, &input) {
+                            return Ok(WriteEntryOutput {
+                                entry_id: existing.entry_id,
+                                entry_hash: existing.entry_hash,
+                                chain_position: existing.chain_position,
+                                written_ts_ms: existing.written_ts.timestamp_millis(),
+                            });
+                        }
+                    }
+                    return Err(ServiceError::AlreadyExists(
+                        "idempotency_key already used with different entry content or metadata"
+                            .to_string(),
+                    ));
                 }
                 Err(RepositoryError::ChainIntegrityViolation) => {
                     // Repeated mismatches indicate potential corruption, halt writes for this type.
@@ -268,28 +274,6 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
         &self,
         query: QueryEntriesInput,
     ) -> Result<(Vec<LedgerEntryRecord>, Option<String>, i64), ServiceError> {
-        let mut entries = self.repo.query_entries().await.map_err(map_repo)?;
-        if let Some(filter) = query.entry_type.as_deref() {
-            entries.retain(|entry| entry.entry_type == filter);
-        }
-        if let Some(filter) = query.agent_id.as_deref() {
-            entries.retain(|entry| entry.agent_id == filter);
-        }
-        if let Some(filter) = query.source_id.as_deref() {
-            entries.retain(|entry| entry.source_id == filter);
-        }
-        if let Some(filter) = query.correlation_id.as_deref() {
-            entries.retain(|entry| entry.correlation_id.as_deref() == Some(filter));
-        }
-        if let Some(from) = query.from_ts {
-            entries.retain(|entry| entry.written_ts.timestamp_millis() >= from);
-        }
-        if let Some(to) = query.to_ts {
-            entries.retain(|entry| entry.written_ts.timestamp_millis() <= to);
-        }
-        entries.sort_by_key(|entry| (entry.written_ts.timestamp_millis(), entry.chain_position));
-        let total = entries.len() as i64;
-
         let size = if query.page_size <= 0 {
             100
         } else if query.page_size > 1000 {
@@ -302,11 +286,22 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
             .as_deref()
             .and_then(|raw| raw.parse::<usize>().ok())
             .unwrap_or(0);
-        let page_entries = entries
-            .into_iter()
-            .skip(offset)
-            .take(size)
-            .collect::<Vec<_>>();
+        let result = self
+            .repo
+            .query_entries(EntryQuery {
+                entry_type_prefix: query.entry_type,
+                agent_id: query.agent_id,
+                source_id: query.source_id,
+                correlation_id: query.correlation_id,
+                from_ts_ms: query.from_ts,
+                to_ts_ms: query.to_ts,
+                limit: size,
+                offset,
+            })
+            .await
+            .map_err(map_repo)?;
+        let page_entries = result.entries;
+        let total = result.total_count;
         let next_offset = offset + page_entries.len();
         let next_token = if next_offset < total as usize {
             Some(next_offset.to_string())
@@ -318,15 +313,19 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
 
     pub async fn verify_entry(&self, entry_id: Uuid) -> Result<VerifyEntryOutput, ServiceError> {
         let entry = self.repo.get_entry(entry_id).await.map_err(map_repo)?;
-        let recomputed = canonical_entry_hash(
-            &entry.entry_type,
-            &entry.agent_id,
-            &entry.content,
-            &entry.content_type,
-            &entry.source_id,
-            entry.written_ts.timestamp_millis(),
-            &entry.previous_hash,
-        );
+        let recomputed = canonical_entry_hash(&CanonicalEntryHashInput {
+            entry_id: entry.entry_id,
+            entry_type: &entry.entry_type,
+            agent_id: &entry.agent_id,
+            content: &entry.content,
+            content_type: &entry.content_type,
+            source_id: &entry.source_id,
+            correlation_id: entry.correlation_id.as_deref(),
+            idempotency_key: entry.idempotency_key.as_deref(),
+            chain_position: entry.chain_position,
+            written_ts_ms: entry.written_ts.timestamp_millis(),
+            previous_hash: &entry.previous_hash,
+        });
         let hash_valid = recomputed == entry.entry_hash;
         let chain_link_valid = if entry.chain_position == 1 {
             entry.previous_hash == sha256_hex(self.config.genesis_hash_input.as_bytes())
@@ -425,15 +424,19 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
                     failure_reason: "chain_link_mismatch".to_string(),
                 });
             }
-            let recomputed = canonical_entry_hash(
-                &entry.entry_type,
-                &entry.agent_id,
-                &entry.content,
-                &entry.content_type,
-                &entry.source_id,
-                entry.written_ts.timestamp_millis(),
-                &entry.previous_hash,
-            );
+            let recomputed = canonical_entry_hash(&CanonicalEntryHashInput {
+                entry_id: entry.entry_id,
+                entry_type: &entry.entry_type,
+                agent_id: &entry.agent_id,
+                content: &entry.content,
+                content_type: &entry.content_type,
+                source_id: &entry.source_id,
+                correlation_id: entry.correlation_id.as_deref(),
+                idempotency_key: entry.idempotency_key.as_deref(),
+                chain_position: entry.chain_position,
+                written_ts_ms: entry.written_ts.timestamp_millis(),
+                previous_hash: &entry.previous_hash,
+            });
             if entry.entry_hash != recomputed {
                 crate::metrics::LEDGER_CHAIN_VERIFY_FAILURE_TOTAL.inc();
                 return Ok(VerifyChainOutput {
@@ -479,10 +482,21 @@ fn map_repo(err: RepositoryError) -> ServiceError {
     match err {
         RepositoryError::NotFound => ServiceError::NotFound,
         RepositoryError::Unavailable => ServiceError::Unavailable,
+        RepositoryError::IdempotencyConflict => ServiceError::AlreadyExists(
+            "idempotency_key already used with different entry content or metadata".to_string(),
+        ),
         RepositoryError::ChainIntegrityViolation => {
             ServiceError::Internal("chain integrity violation".to_string())
         }
     }
+}
+
+fn idempotent_request_matches(existing: &LedgerEntryRecord, input: &WriteEntryInput) -> bool {
+    existing.agent_id == input.agent_id
+        && existing.content == input.content
+        && existing.content_type == input.content_type
+        && existing.source_id == input.source_id
+        && existing.correlation_id == input.correlation_id
 }
 
 #[cfg(test)]
@@ -490,7 +504,9 @@ mod tests {
     use super::*;
     use crate::metrics;
     use crate::repository::InMemoryLedgerRepository;
-    use crate::repository::{ChainTip, EntryWriteInput, LedgerEntryRecord, WriteResult};
+    use crate::repository::{
+        ChainTip, EntryQuery, EntryWriteInput, LedgerEntryRecord, QueryResult, WriteResult,
+    };
     use async_trait::async_trait;
     use chrono::Utc;
     use std::collections::HashMap;
@@ -509,6 +525,8 @@ mod tests {
             kafka_sasl_username: "user".to_string(),
             kafka_sasl_password: "pass".to_string(),
             genesis_hash_input: "ARE_LEDGER_GENESIS".to_string(),
+            api_token: None,
+            shutdown_token: None,
         })
     }
 
@@ -569,6 +587,36 @@ mod tests {
             .expect("second");
         assert_eq!(first.entry_id, second.entry_id);
         assert_eq!(first.entry_hash, second.entry_hash);
+    }
+
+    #[tokio::test]
+    async fn idempotency_rejects_conflicting_retry() {
+        let service = service();
+        let _ = service
+            .write_entry(WriteEntryInput {
+                entry_type: "LEDGER_ENTRY_TYPE_GATE_DECISION".to_string(),
+                agent_id: "agent-1".to_string(),
+                content: b"one".to_vec(),
+                content_type: "application/json".to_string(),
+                source_id: "ARE-FOUNDATION-PROOF".to_string(),
+                correlation_id: Some("trace-1".to_string()),
+                idempotency_key: Some("idem-conflict".to_string()),
+            })
+            .await
+            .expect("first");
+        let err = service
+            .write_entry(WriteEntryInput {
+                entry_type: "LEDGER_ENTRY_TYPE_GATE_DECISION".to_string(),
+                agent_id: "agent-1".to_string(),
+                content: b"two".to_vec(),
+                content_type: "application/json".to_string(),
+                source_id: "ARE-FOUNDATION-PROOF".to_string(),
+                correlation_id: Some("trace-1".to_string()),
+                idempotency_key: Some("idem-conflict".to_string()),
+            })
+            .await
+            .expect_err("conflicting retry should fail");
+        assert!(matches!(err, ServiceError::AlreadyExists(_)));
     }
 
     #[tokio::test]
@@ -705,6 +753,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn query_entries_entry_type_filter_matches_prefix() {
+        let service = service();
+        let prefix = "openshell";
+        for suffix in ["http_activity", "network_activity"] {
+            let _ = service
+                .write_entry(WriteEntryInput {
+                    entry_type: format!("{prefix}.{suffix}"),
+                    agent_id: "agent-x".to_string(),
+                    content: suffix.as_bytes().to_vec(),
+                    content_type: "application/json".to_string(),
+                    source_id: "openshell-supervisor".to_string(),
+                    correlation_id: None,
+                    idempotency_key: Some(format!("prefix-{suffix}")),
+                })
+                .await
+                .expect("write");
+        }
+        let _ = service
+            .write_entry(WriteEntryInput {
+                entry_type: "kagenti.tool.call".to_string(),
+                agent_id: "agent-x".to_string(),
+                content: b"other".to_vec(),
+                content_type: "application/json".to_string(),
+                source_id: "kagenti".to_string(),
+                correlation_id: None,
+                idempotency_key: Some("prefix-other".to_string()),
+            })
+            .await
+            .expect("write");
+
+        let (entries, _, total) = service
+            .query_entries(QueryEntriesInput {
+                entry_type: Some(prefix.to_string()),
+                page_size: 10,
+                ..Default::default()
+            })
+            .await
+            .expect("query");
+        assert_eq!(total, 2);
+        assert_eq!(entries.len(), 2);
+        assert!(entries
+            .iter()
+            .all(|entry| entry.entry_type.starts_with(prefix)));
+    }
+
+    #[tokio::test]
     async fn verify_chain_not_found_on_invalid_bounds() {
         let service = service();
         let _ = service
@@ -752,8 +846,11 @@ mod tests {
                 .cloned()
                 .ok_or(RepositoryError::NotFound)
         }
-        async fn query_entries(&self) -> Result<Vec<LedgerEntryRecord>, RepositoryError> {
-            Ok(Vec::new())
+        async fn query_entries(&self, _query: EntryQuery) -> Result<QueryResult, RepositoryError> {
+            Ok(QueryResult {
+                entries: Vec::new(),
+                total_count: 0,
+            })
         }
         async fn get_chain_tip(&self, _entry_type: &str) -> Result<ChainTip, RepositoryError> {
             Err(RepositoryError::NotFound)
@@ -832,7 +929,7 @@ mod tests {
         async fn get_entry(&self, _entry_id: Uuid) -> Result<LedgerEntryRecord, RepositoryError> {
             Err(self.error.clone())
         }
-        async fn query_entries(&self) -> Result<Vec<LedgerEntryRecord>, RepositoryError> {
+        async fn query_entries(&self, _query: EntryQuery) -> Result<QueryResult, RepositoryError> {
             Err(self.error.clone())
         }
         async fn get_chain_tip(&self, _entry_type: &str) -> Result<ChainTip, RepositoryError> {
@@ -916,8 +1013,14 @@ mod tests {
             ) -> Result<LedgerEntryRecord, RepositoryError> {
                 Err(RepositoryError::NotFound)
             }
-            async fn query_entries(&self) -> Result<Vec<LedgerEntryRecord>, RepositoryError> {
-                Ok(Vec::new())
+            async fn query_entries(
+                &self,
+                _query: EntryQuery,
+            ) -> Result<QueryResult, RepositoryError> {
+                Ok(QueryResult {
+                    entries: Vec::new(),
+                    total_count: 0,
+                })
             }
             async fn get_chain_tip(&self, _entry_type: &str) -> Result<ChainTip, RepositoryError> {
                 Ok(ChainTip {
@@ -1017,8 +1120,24 @@ mod tests {
     #[tokio::test]
     async fn verify_chain_reports_first_invalid_entry() {
         let repo = Arc::new(StaticRepo::default());
+        let entry1_id = Uuid::new_v4();
+        let entry1_ts = chrono::DateTime::<Utc>::from_timestamp_millis(1).expect("ts");
+        let entry1_prev = sha256_hex(b"ARE_LEDGER_GENESIS");
+        let entry1_hash = canonical_entry_hash(&CanonicalEntryHashInput {
+            entry_id: entry1_id,
+            entry_type: "LEDGER_ENTRY_TYPE_ACTION_RECEIPT",
+            agent_id: "agent-1",
+            content: b"payload-1",
+            content_type: "application/json",
+            source_id: "ARE-FOUNDATION-PROOF",
+            correlation_id: None,
+            idempotency_key: None,
+            chain_position: 1,
+            written_ts_ms: entry1_ts.timestamp_millis(),
+            previous_hash: &entry1_prev,
+        });
         let entry1 = LedgerEntryRecord {
-            entry_id: Uuid::new_v4(),
+            entry_id: entry1_id,
             entry_type: "LEDGER_ENTRY_TYPE_ACTION_RECEIPT".to_string(),
             agent_id: "agent-1".to_string(),
             content: b"payload-1".to_vec(),
@@ -1026,18 +1145,10 @@ mod tests {
             source_id: "ARE-FOUNDATION-PROOF".to_string(),
             correlation_id: None,
             idempotency_key: None,
-            entry_hash: canonical_entry_hash(
-                "LEDGER_ENTRY_TYPE_ACTION_RECEIPT",
-                "agent-1",
-                b"payload-1",
-                "application/json",
-                "ARE-FOUNDATION-PROOF",
-                1,
-                &sha256_hex(b"ARE_LEDGER_GENESIS"),
-            ),
-            previous_hash: sha256_hex(b"ARE_LEDGER_GENESIS"),
+            entry_hash: entry1_hash,
+            previous_hash: entry1_prev,
             chain_position: 1,
-            written_ts: chrono::DateTime::<Utc>::from_timestamp_millis(1).expect("ts"),
+            written_ts: entry1_ts,
         };
         let entry2 = LedgerEntryRecord {
             entry_id: Uuid::new_v4(),
@@ -1097,6 +1208,32 @@ mod tests {
             .await
             .expect("verify");
         assert!(!v.chain_valid);
+        assert_eq!(v.failure_reason, "entry_hash_mismatch");
+    }
+
+    #[tokio::test]
+    async fn verify_entry_fails_after_correlation_id_tamper() {
+        let repo = Arc::new(InMemoryLedgerRepository::default());
+        let svc = ImmutableLedgerService::new(repo.clone(), Arc::new(NoopEventPublisher), config());
+        let w = svc
+            .write_entry(WriteEntryInput {
+                entry_type: "LEDGER_ENTRY_TYPE_CORRELATION_TAMPER".to_string(),
+                agent_id: "agent-y".to_string(),
+                content: b"payload".to_vec(),
+                content_type: "application/json".to_string(),
+                source_id: "ARE-TEST".to_string(),
+                correlation_id: Some("trace-original".to_string()),
+                idempotency_key: Some("corr-tamper".to_string()),
+            })
+            .await
+            .expect("write");
+        assert!(
+            repo.test_corrupt_correlation_id(w.entry_id, "trace-tampered")
+                .await,
+            "expected corrupt helper to find entry"
+        );
+        let v = svc.verify_entry(w.entry_id).await.expect("verify");
+        assert!(!v.hash_valid);
         assert_eq!(v.failure_reason, "entry_hash_mismatch");
     }
 
