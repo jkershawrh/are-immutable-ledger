@@ -10,6 +10,7 @@ service ImmutableLedgerService {
   rpc GetChainTip(GetChainTipRequest) returns (GetChainTipResponse);
   rpc IssueReceipt(WriteEntryRequest) returns (ProofReceipt);
   rpc VerifyProof(VerifyProofRequest) returns (VerifyProofResponse);
+  rpc GetEntryByHash(GetEntryByHashRequest) returns (GetEntryResponse);
 }
 
 message WriteEntryRequest {
@@ -97,6 +98,14 @@ message VerifyProofResponse {
   int64 written_ts = 4;
   int64 chain_position = 5;
   string failure_reason = 6;
+  string source_id = 7;
+  string correlation_id = 8;
+  string content_type = 9;
+}
+
+message GetEntryByHashRequest {
+  string entry_hash = 1;
+  string entry_type = 2;
 }
 
 message LedgerEntry {

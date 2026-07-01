@@ -65,6 +65,9 @@ pub struct VerifyProofOutput {
     pub written_ts_ms: i64,
     pub chain_position: i64,
     pub failure_reason: String,
+    pub source_id: String,
+    pub correlation_id: String,
+    pub content_type: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -481,14 +484,26 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
         self.repo.get_chain_tip(entry_type).await.map_err(map_repo)
     }
 
+    pub async fn get_entry_by_hash(
+        &self,
+        entry_type: &str,
+        entry_hash: &str,
+    ) -> Result<LedgerEntryRecord, ServiceError> {
+        self.repo
+            .get_entry_by_hash(entry_type, entry_hash)
+            .await
+            .map_err(map_repo)
+    }
+
     pub async fn issue_receipt(
         &self,
         input: WriteEntryInput,
     ) -> Result<ProofReceiptOutput, ServiceError> {
+        let entry_type = input.entry_type.clone();
         let write = self.write_entry(input).await?;
         Ok(ProofReceiptOutput {
             entry_hash: write.entry_hash,
-            entry_type: String::new(),
+            entry_type,
             chain_position: write.chain_position,
             written_ts_ms: write.written_ts_ms,
             entry_id: write.entry_id,
@@ -532,6 +547,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
             } else {
                 "entry_hash_mismatch".to_string()
             },
+            source_id: entry.source_id,
+            correlation_id: entry.correlation_id.unwrap_or_default(),
+            content_type: entry.content_type,
         })
     }
 }

@@ -1545,6 +1545,66 @@ def test_l17_12(c):
     assert success[0] >= 80, f"Expected 80+ receipts, got {success[0]}"
 
 
+# ─── L18: Receipt Primitives ──────────────────────────────
+
+@test("L18.01", "VerifyProof returns source_id, correlation_id, content_type")
+def test_l18_01(c):
+    etype = f"test.l18.fields.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "authbridge-proxy",
+        json.dumps({"guardrail": "pii_scan"}),
+        content_type="application/json",
+        source_id="authbridge-eu-west", correlation_id="trace-l18-01")
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid
+    assert v.source_id == "authbridge-eu-west", f"source_id not returned: {v.source_id}"
+    assert v.correlation_id == "trace-l18-01", f"correlation_id not returned: {v.correlation_id}"
+    assert v.content_type == "application/json", f"content_type not returned: {v.content_type}"
+
+@test("L18.02", "GetEntryByHash retrieves full entry content")
+def test_l18_02(c):
+    etype = f"test.l18.getbyhash.{uuid.uuid4().hex[:8]}"
+    original_content = json.dumps({"guardrail": "toxicity", "result": "clean", "score": 0.02})
+    receipt = c.issue_receipt(etype, "authbridge-proxy", original_content,
+        source_id="authbridge", correlation_id="trace-l18-02")
+    entry = c.get_entry_by_hash(receipt.entry_hash, etype)
+    assert entry.content.decode("utf-8") == original_content, "Content not preserved in hash lookup"
+    assert entry.agent_id == "authbridge-proxy"
+    assert entry.source_id == "authbridge"
+
+@test("L18.03", "GetEntryByHash with wrong type returns not found")
+def test_l18_03(c):
+    import grpc
+    etype = f"test.l18.wrongtype.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "agent", json.dumps({"test": True}), source_id="test")
+    try:
+        c.get_entry_by_hash(receipt.entry_hash, "wrong.type")
+        assert False, "Should return NOT_FOUND for wrong type"
+    except grpc.RpcError as e:
+        assert e.code() == grpc.StatusCode.NOT_FOUND
+
+@test("L18.04", "Downstream can verify + read content in two calls")
+def test_l18_04(c):
+    etype = f"test.l18.twosteap.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "guardrail-proxy",
+        json.dumps({"guardrail": "prompt_injection", "blocked": False, "confidence": 0.98}),
+        source_id="authbridge", correlation_id="trace-l18-04")
+    # Step 1: Verify (fast, no content)
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid
+    assert v.source_id == "authbridge"
+    # Step 2: Read full content (only if verifier needs details)
+    entry = c.get_entry_by_hash(receipt.entry_hash, etype)
+    content = json.loads(entry.content.decode())
+    assert content["guardrail"] == "prompt_injection"
+    assert content["confidence"] == 0.98
+
+@test("L18.05", "IssueReceipt returns correct entry_type (bug fix)")
+def test_l18_05(c):
+    etype = f"test.l18.typebug.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "agent", json.dumps({"test": True}), source_id="test")
+    assert receipt.entry_type == etype, f"entry_type should be '{etype}', got '{receipt.entry_type}'"
+
+
 LIVE_TESTS = [
     test_l9_01, test_l9_02, test_l9_03, test_l9_04, test_l9_05,
     test_l13_01, test_l13_02, test_l13_03, test_l13_04, test_l13_05,
@@ -1554,6 +1614,7 @@ LIVE_TESTS = [
     test_l17_01, test_l17_02, test_l17_03, test_l17_04, test_l17_05,
     test_l17_06, test_l17_07, test_l17_08, test_l17_09, test_l17_10,
     test_l17_11, test_l17_12,
+    test_l18_01, test_l18_02, test_l18_03, test_l18_04, test_l18_05,
 ]
 
 
