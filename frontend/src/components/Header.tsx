@@ -31,7 +31,7 @@ export function Header() {
         </div>
       </div>
       <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-        cross-system agentic proof chain
+        proof chain · runtime trust
       </div>
     </motion.header>
   )
