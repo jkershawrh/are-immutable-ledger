@@ -90,6 +90,10 @@ class LedgerClient:
         return self._call(self.stub.VerifyProof,
                          pb.VerifyProofRequest(entry_hash=entry_hash, entry_type=entry_type))
 
+    def get_entry_by_hash(self, entry_hash, entry_type):
+        return self._call(self.stub.GetEntryByHash,
+                         pb.GetEntryByHashRequest(entry_hash=entry_hash, entry_type=entry_type)).entry
+
     def close(self):
         self.channel.close()
 

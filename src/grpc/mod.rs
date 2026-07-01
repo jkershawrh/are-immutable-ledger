@@ -231,6 +231,37 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
         }))
     }
 
+    async fn get_entry_by_hash(
+        &self,
+        request: Request<pb::GetEntryByHashRequest>,
+    ) -> Result<Response<pb::GetEntryResponse>, Status> {
+        let input = request.get_ref();
+        if input.entry_hash.is_empty() || input.entry_type.is_empty() {
+            return Err(Status::invalid_argument("entry_hash and entry_type are required"));
+        }
+        let entry = self
+            .service
+            .get_entry_by_hash(&input.entry_type, &input.entry_hash)
+            .await
+            .map_err(map_err)?;
+        Ok(Response::new(pb::GetEntryResponse {
+            entry: Some(pb::LedgerEntry {
+                entry_id: entry.entry_id.to_string(),
+                entry_type: entry.entry_type,
+                agent_id: entry.agent_id,
+                content: entry.content,
+                content_type: entry.content_type,
+                source_id: entry.source_id,
+                correlation_id: entry.correlation_id.unwrap_or_default(),
+                entry_hash: entry.entry_hash,
+                previous_hash: entry.previous_hash,
+                chain_position: entry.chain_position,
+                written_ts: entry.written_ts.timestamp_millis(),
+                idempotency_key: entry.idempotency_key.unwrap_or_default(),
+            }),
+        }))
+    }
+
     async fn verify_proof(
         &self,
         request: Request<pb::VerifyProofRequest>,
@@ -251,6 +282,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
             written_ts: output.written_ts_ms,
             chain_position: output.chain_position,
             failure_reason: output.failure_reason,
+            source_id: output.source_id,
+            correlation_id: output.correlation_id,
+            content_type: output.content_type,
         }))
     }
 }
