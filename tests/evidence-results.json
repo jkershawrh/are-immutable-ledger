@@ -1,61 +1,73 @@
 {
-  "timestamp": 1782931542308,
+  "timestamp": 1782936702902,
   "endpoint": "localhost:19292",
-  "total": 9,
-  "green": 9,
+  "total": 11,
+  "green": 11,
   "red": 0,
   "results": [
     {
-      "id": "L18.01",
-      "desc": "VerifyProof returns source_id, correlation_id, content_type",
+      "id": "L19.01",
+      "desc": "CPEX allow decision: issue receipt with policy context",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L18.02",
-      "desc": "GetEntryByHash retrieves full entry content",
+      "id": "L19.02",
+      "desc": "CPEX deny decision: issue receipt with denial reason",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L18.03",
-      "desc": "GetEntryByHash with wrong type returns not found",
+      "id": "L19.03",
+      "desc": "CPEX session taint: allow \u2192 taint \u2192 deny chain",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L18.04",
-      "desc": "Downstream can verify + read content in two calls",
+      "id": "L19.04",
+      "desc": "CPEX redaction: input_hash detects pre/post redact payload difference",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L18.05",
-      "desc": "IssueReceipt returns correct entry_type (bug fix)",
+      "id": "L19.05",
+      "desc": "CPEX token delegation: receipt records audience-scoped credential",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L18.06",
-      "desc": "IssueReceipt with input_hash: verifier sees matching hash",
+      "id": "L19.06",
+      "desc": "CPEX PII scan deny: receipt records attempted violation",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L18.07",
-      "desc": "Payload transformation detected via input_hash mismatch",
+      "id": "L19.07",
+      "desc": "CPEX multi-hop: three enforcement points, one correlation, all verifiable",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L18.08",
-      "desc": "input_hash tampering breaks verification",
+      "id": "L19.08",
+      "desc": "CPEX cross-principal isolation: same session, different users, separate receipts",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L18.09",
-      "desc": "input_hash is optional: receipts without it still work",
+      "id": "L19.09",
+      "desc": "CPEX Cedar PDP allow: internal repo access permitted",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L19.10",
+      "desc": "CPEX Cedar PDP deny: external repo access blocked",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L19.11",
+      "desc": "CPEX APL gate short-circuit: deny before PDP runs",
       "status": "GREEN",
       "detail": ""
     }

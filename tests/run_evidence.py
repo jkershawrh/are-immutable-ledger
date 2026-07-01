@@ -1653,6 +1653,279 @@ def test_l18_05(c):
     assert receipt.entry_type == etype, f"entry_type should be '{etype}', got '{receipt.entry_type}'"
 
 
+# ─── L19: CPEX Integration Contract ──────────────────────
+# These tests simulate the CPEX/Praxis policy pipeline calling the ledger.
+# They validate the exact contract faraujo's CPEX plugin would use.
+# All run against the ledger — no Praxis required.
+
+@test("L19.01", "CPEX allow decision: issue receipt with policy context")
+def test_l19_01(c):
+    session = f"cpex-session-{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(
+        entry_type="cpex.policy.allow",
+        agent_id="bob",
+        content=json.dumps({
+            "tool": "get_compensation",
+            "decision": "allow",
+            "policy_steps": ["require(role.hr)", "delegate(workday-oauth)"],
+            "delegated_to": "workday-api",
+            "subject_roles": ["hr"],
+        }),
+        source_id="praxis-gateway",
+        correlation_id=session,
+        input_hash=hashlib.sha256(json.dumps({"employee_id": "EMP-001234"}).encode()).hexdigest(),
+    )
+    assert receipt.entry_hash, "Receipt should have hash"
+    assert receipt.input_hash, "Receipt should echo input_hash"
+    v = c.verify_proof(receipt.entry_hash, "cpex.policy.allow")
+    assert v.valid
+    assert v.agent_id == "bob"
+    assert v.source_id == "praxis-gateway"
+    assert v.correlation_id == session
+
+@test("L19.02", "CPEX deny decision: issue receipt with denial reason")
+def test_l19_02(c):
+    session = f"cpex-deny-{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(
+        entry_type="cpex.policy.deny",
+        agent_id="alice",
+        content=json.dumps({
+            "tool": "get_compensation",
+            "decision": "deny",
+            "reason": "require(role.hr) failed",
+            "subject_roles": ["engineering"],
+        }),
+        source_id="praxis-gateway",
+        correlation_id=session,
+    )
+    v = c.verify_proof(receipt.entry_hash, "cpex.policy.deny")
+    assert v.valid
+    assert v.agent_id == "alice"
+    entry = c.get_entry_by_hash(receipt.entry_hash, "cpex.policy.deny")
+    content = json.loads(entry.content.decode())
+    assert content["decision"] == "deny"
+    assert content["reason"] == "require(role.hr) failed"
+
+@test("L19.03", "CPEX session taint: allow → taint → deny chain")
+def test_l19_03(c):
+    session = f"cpex-taint-{uuid.uuid4().hex[:8]}"
+    # Step 1: Compensation accessed (allow + taint)
+    r1 = c.issue_receipt(
+        entry_type="cpex.compensation.accessed",
+        agent_id="bob",
+        content=json.dumps({
+            "tool": "get_compensation", "decision": "allow",
+            "taint_applied": {"label": "secret", "scope": "session"},
+        }),
+        source_id="praxis-gateway",
+        correlation_id=session,
+    )
+    # Step 2: Email denied (taint check)
+    r2 = c.issue_receipt(
+        entry_type="cpex.email.denied",
+        agent_id="bob",
+        content=json.dumps({
+            "tool": "send_email", "decision": "deny",
+            "reason": "session_tainted_secret",
+            "taint_labels": ["secret"],
+        }),
+        source_id="praxis-gateway",
+        correlation_id=session,
+    )
+    # Both verifiable
+    assert c.verify_proof(r1.entry_hash, "cpex.compensation.accessed").valid
+    assert c.verify_proof(r2.entry_hash, "cpex.email.denied").valid
+    # Both linked by session
+    entries = c.query(correlation_id=session)
+    assert len(entries) == 2, f"Expected 2 entries for session, got {len(entries)}"
+    types = set(e.entry_type for e in entries)
+    assert "cpex.compensation.accessed" in types
+    assert "cpex.email.denied" in types
+
+@test("L19.04", "CPEX redaction: input_hash detects pre/post redact payload difference")
+def test_l19_04(c):
+    session = f"cpex-redact-{uuid.uuid4().hex[:8]}"
+    original_args = json.dumps({"employee_id": "EMP-001234", "ssn": "123-45-6789"})
+    redacted_args = json.dumps({"employee_id": "EMP-001234", "ssn": "[REDACTED]"})
+    original_hash = hashlib.sha256(original_args.encode()).hexdigest()
+    redacted_hash = hashlib.sha256(redacted_args.encode()).hexdigest()
+    # Receipt issued with original payload hash (before redaction)
+    receipt = c.issue_receipt(
+        entry_type="cpex.policy.allow",
+        agent_id="eve",
+        content=json.dumps({"tool": "get_compensation", "decision": "allow", "redacted_fields": ["ssn"]}),
+        source_id="praxis-gateway",
+        correlation_id=session,
+        input_hash=original_hash,
+    )
+    v = c.verify_proof(receipt.entry_hash, "cpex.policy.allow")
+    assert v.valid
+    # Downstream sees redacted payload — hashes don't match
+    assert v.input_hash == original_hash
+    assert v.input_hash != redacted_hash, "Original and redacted hashes should differ"
+    # Downstream knows: receipt covers PRE-redaction payload, not what I received
+
+@test("L19.05", "CPEX token delegation: receipt records audience-scoped credential")
+def test_l19_05(c):
+    session = f"cpex-deleg-{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(
+        entry_type="cpex.delegation.granted",
+        agent_id="bob",
+        content=json.dumps({
+            "tool": "get_compensation",
+            "delegator": "workday-oauth",
+            "target_audience": "workday-api",
+            "permissions": ["read_compensation"],
+            "token_exchange": "rfc8693",
+        }),
+        source_id="praxis-gateway",
+        correlation_id=session,
+    )
+    entry = c.get_entry_by_hash(receipt.entry_hash, "cpex.delegation.granted")
+    content = json.loads(entry.content.decode())
+    assert content["token_exchange"] == "rfc8693"
+    assert content["target_audience"] == "workday-api"
+    assert "read_compensation" in content["permissions"]
+
+@test("L19.06", "CPEX PII scan deny: receipt records attempted violation")
+def test_l19_06(c):
+    session = f"cpex-pii-{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(
+        entry_type="cpex.pii.denied",
+        agent_id="bob",
+        content=json.dumps({
+            "tool": "send_email",
+            "decision": "deny",
+            "reason": "pii_detected",
+            "pii_type": "ssn",
+            "scan_result": "blocked_before_send",
+        }),
+        source_id="praxis-gateway",
+        correlation_id=session,
+        input_hash=hashlib.sha256(b'{"body":"call me at 123-45-6789"}').hexdigest(),
+    )
+    v = c.verify_proof(receipt.entry_hash, "cpex.pii.denied")
+    assert v.valid
+    assert v.input_hash, "PII scan receipt should include input_hash of scanned payload"
+
+@test("L19.07", "CPEX multi-hop: three enforcement points, one correlation, all verifiable")
+def test_l19_07(c):
+    corr = f"cpex-multihop-{uuid.uuid4().hex[:8]}"
+    # Hop 1: APL gate
+    r1 = c.issue_receipt("cpex.apl.allow", "bob",
+        json.dumps({"step": "require(role.hr)", "result": "pass"}),
+        source_id="praxis-apl", correlation_id=corr)
+    # Hop 2: PDP (Cedar)
+    r2 = c.issue_receipt("cpex.pdp.allow", "bob",
+        json.dumps({"step": "cedar", "policy": "permit(role.hr)", "result": "allow"}),
+        source_id="praxis-pdp", correlation_id=corr)
+    # Hop 3: Delegation
+    r3 = c.issue_receipt("cpex.delegation.granted", "bob",
+        json.dumps({"step": "delegate", "audience": "workday-api"}),
+        source_id="praxis-delegator", correlation_id=corr)
+    # All three verifiable
+    assert c.verify_proof(r1.entry_hash, "cpex.apl.allow").valid
+    assert c.verify_proof(r2.entry_hash, "cpex.pdp.allow").valid
+    assert c.verify_proof(r3.entry_hash, "cpex.delegation.granted").valid
+    # All linked
+    entries = c.query(correlation_id=corr)
+    assert len(entries) == 3
+    sources = set(e.source_id for e in entries)
+    assert len(sources) == 3, f"Expected 3 distinct enforcement points, got {sources}"
+
+@test("L19.09", "CPEX Cedar PDP allow: internal repo access permitted")
+def test_l19_09(c):
+    session = f"cpex-cedar-allow-{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(
+        entry_type="cpex.pdp.allow",
+        agent_id="alice",
+        content=json.dumps({
+            "tool": "search_repos",
+            "decision": "allow",
+            "pdp": "cedar",
+            "policy_matched": "permit(principal, action, resource) when { principal.roles.contains(\"engineer\") && resource.visibility == \"internal\" }",
+            "resource": {"name": "internal-repo", "visibility": "internal"},
+            "subject_roles": ["engineering"],
+        }),
+        source_id="praxis-pdp-cedar",
+        correlation_id=session,
+    )
+    v = c.verify_proof(receipt.entry_hash, "cpex.pdp.allow")
+    assert v.valid
+    entry = c.get_entry_by_hash(receipt.entry_hash, "cpex.pdp.allow")
+    content = json.loads(entry.content.decode())
+    assert content["pdp"] == "cedar"
+    assert content["resource"]["visibility"] == "internal"
+
+@test("L19.10", "CPEX Cedar PDP deny: external repo access blocked")
+def test_l19_10(c):
+    session = f"cpex-cedar-deny-{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(
+        entry_type="cpex.pdp.deny",
+        agent_id="alice",
+        content=json.dumps({
+            "tool": "search_repos",
+            "decision": "deny",
+            "pdp": "cedar",
+            "reason": "cedar.default_deny",
+            "resource": {"name": "external-repo", "visibility": "external"},
+            "subject_roles": ["engineering"],
+        }),
+        source_id="praxis-pdp-cedar",
+        correlation_id=session,
+    )
+    v = c.verify_proof(receipt.entry_hash, "cpex.pdp.deny")
+    assert v.valid
+    entry = c.get_entry_by_hash(receipt.entry_hash, "cpex.pdp.deny")
+    content = json.loads(entry.content.decode())
+    assert content["reason"] == "cedar.default_deny"
+    assert content["resource"]["visibility"] == "external"
+
+@test("L19.11", "CPEX APL gate short-circuit: deny before PDP runs")
+def test_l19_11(c):
+    session = f"cpex-shortcircuit-{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(
+        entry_type="cpex.apl.deny",
+        agent_id="bob",
+        content=json.dumps({
+            "tool": "search_repos",
+            "decision": "deny",
+            "reason": "require(team.engineering) failed",
+            "gate": "apl",
+            "pdp_invoked": False,
+            "subject_roles": ["hr"],
+            "subject_teams": [],
+        }),
+        source_id="praxis-apl",
+        correlation_id=session,
+    )
+    v = c.verify_proof(receipt.entry_hash, "cpex.apl.deny")
+    assert v.valid
+    entry = c.get_entry_by_hash(receipt.entry_hash, "cpex.apl.deny")
+    content = json.loads(entry.content.decode())
+    assert content["pdp_invoked"] is False, "PDP should NOT have run — APL gate short-circuited"
+    assert content["gate"] == "apl"
+
+@test("L19.08", "CPEX cross-principal isolation: same session, different users, separate receipts")
+def test_l19_08(c):
+    session = f"cpex-isolation-{uuid.uuid4().hex[:8]}"
+    # Bob's receipt
+    r_bob = c.issue_receipt("cpex.policy.allow", "bob",
+        json.dumps({"tool": "get_compensation", "decision": "allow"}),
+        source_id="praxis-gateway", correlation_id=f"{session}-bob")
+    # Alice's receipt (same session ID concept but different user)
+    r_alice = c.issue_receipt("cpex.policy.deny", "alice",
+        json.dumps({"tool": "get_compensation", "decision": "deny"}),
+        source_id="praxis-gateway", correlation_id=f"{session}-alice")
+    # Both verifiable independently
+    v_bob = c.verify_proof(r_bob.entry_hash, "cpex.policy.allow")
+    v_alice = c.verify_proof(r_alice.entry_hash, "cpex.policy.deny")
+    assert v_bob.valid and v_bob.agent_id == "bob"
+    assert v_alice.valid and v_alice.agent_id == "alice"
+    # Different chains, no cross-contamination
+    assert r_bob.entry_hash != r_alice.entry_hash
+
+
 LIVE_TESTS = [
     test_l9_01, test_l9_02, test_l9_03, test_l9_04, test_l9_05,
     test_l13_01, test_l13_02, test_l13_03, test_l13_04, test_l13_05,
@@ -1664,6 +1937,9 @@ LIVE_TESTS = [
     test_l17_11, test_l17_12,
     test_l18_01, test_l18_02, test_l18_03, test_l18_04, test_l18_05,
     test_l18_06, test_l18_07, test_l18_08, test_l18_09,
+    test_l19_01, test_l19_02, test_l19_03, test_l19_04, test_l19_05,
+    test_l19_06, test_l19_07, test_l19_08, test_l19_09, test_l19_10,
+    test_l19_11,
 ]
 
 
