@@ -122,6 +122,11 @@ pub trait LedgerRepository: Send + Sync {
         entry_type: &str,
         idempotency_key: &str,
     ) -> Result<Option<LedgerEntryRecord>, RepositoryError>;
+    async fn get_entry_by_hash(
+        &self,
+        entry_type: &str,
+        entry_hash: &str,
+    ) -> Result<LedgerEntryRecord, RepositoryError>;
     async fn pending_outbox(&self) -> Result<Vec<OutboxRecord>, RepositoryError>;
     async fn mark_outbox_delivered(&self, outbox_id: Uuid) -> Result<(), RepositoryError>;
 }
@@ -297,6 +302,20 @@ impl LedgerRepository for InMemoryLedgerRepository {
             }
         }
         Ok(out)
+    }
+
+    async fn get_entry_by_hash(
+        &self,
+        entry_type: &str,
+        entry_hash: &str,
+    ) -> Result<LedgerEntryRecord, RepositoryError> {
+        let guard = self.inner.read().await;
+        guard
+            .entries
+            .values()
+            .find(|e| e.entry_type == entry_type && e.entry_hash == entry_hash)
+            .cloned()
+            .ok_or(RepositoryError::NotFound)
     }
 
     async fn find_idempotent(

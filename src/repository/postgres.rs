@@ -336,6 +336,26 @@ impl LedgerRepository for PostgresLedgerRepository {
         Ok(rows.iter().map(Self::map_row_entry).collect())
     }
 
+    async fn get_entry_by_hash(
+        &self,
+        entry_type: &str,
+        entry_hash: &str,
+    ) -> Result<LedgerEntryRecord, RepositoryError> {
+        let client = self.client.lock().await;
+        let row = client
+            .query_opt(
+                "SELECT entry_id, entry_type, agent_id, content, content_type, source_id,
+                        correlation_id, idempotency_key, entry_hash, previous_hash, chain_position, written_ts
+                 FROM are_ledger.ledger_entries
+                 WHERE entry_type = $1 AND entry_hash = $2",
+                &[&entry_type, &entry_hash],
+            )
+            .await
+            .map_err(|_| RepositoryError::Unavailable)?;
+        row.map(|r| Self::map_row_entry(&r))
+            .ok_or(RepositoryError::NotFound)
+    }
+
     async fn find_idempotent(
         &self,
         entry_type: &str,

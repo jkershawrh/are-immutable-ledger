@@ -1073,8 +1073,11 @@ ALL_TESTS = [
     # L12: Adversarial / Red Team (8 tests)
     test_l12_01, test_l12_02, test_l12_03, test_l12_05, test_l12_06,
     test_l12_07, test_l12_08, test_l12_10,
-    # L14: Synthetic Testing (5 tests)
+    # L14: Synthetic Testing (4 tests)
     test_l14_01, test_l14_02, test_l14_03, test_l14_05,
+    # L16: Proof Receipts (7 tests)
+    test_l16_01, test_l16_02, test_l16_03, test_l16_04, test_l16_05,
+    test_l16_06, test_l16_07,
 ]
 
 # ─── L9: Live Integration (optional, requires --live) ────
@@ -1264,6 +1267,106 @@ def test_l15_05(c):
                     ("deny" in e.entry_type or "network_activity" in e.entry_type) and
                     b"Denied" in e.content]
     assert len(live_denials) >= 1, "Expected at least 1 live denial entry for drift check"
+
+
+# ─── L16: Proof Receipts ──────────────────────────────────
+
+@test("L16.01", "IssueReceipt returns compact ProofReceipt")
+def test_l16_01(c):
+    receipt = c.issue_receipt(
+        f"test.l16.receipt.{uuid.uuid4().hex[:8]}", "agent-l16",
+        json.dumps({"guardrail": "pii_scan", "result": "clean"}),
+        source_id="authbridge-test", correlation_id="trace-l16-01")
+    assert receipt.entry_hash, "No entry_hash in receipt"
+    assert receipt.entry_type, "No entry_type in receipt"
+    assert receipt.chain_position >= 1, "Invalid chain_position"
+    assert receipt.written_ts > 0, "Invalid written_ts"
+    assert receipt.entry_id, "No entry_id in receipt"
+
+@test("L16.02", "VerifyProof with valid hash returns valid=true")
+def test_l16_02(c):
+    etype = f"test.l16.verify.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "agent-l16",
+        json.dumps({"check": "validated"}), source_id="test")
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid, f"Proof should be valid: {v.failure_reason}"
+    assert v.agent_id == "agent-l16", f"Wrong agent: {v.agent_id}"
+    assert v.chain_position >= 1, f"Wrong position: {v.chain_position}"
+
+@test("L16.03", "VerifyProof with unknown hash returns not found")
+def test_l16_03(c):
+    import grpc
+    try:
+        c.verify_proof("0000000000000000000000000000000000000000000000000000000000000000",
+                       "test.l16.nonexistent")
+        assert False, "Should have raised not found"
+    except grpc.RpcError as e:
+        assert e.code() == grpc.StatusCode.NOT_FOUND, f"Expected NOT_FOUND, got {e.code()}"
+
+@test("L16.04", "VerifyProof with tampered entry returns invalid")
+def test_l16_04(c):
+    import subprocess
+    etype = f"test.l16.tamper.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "agent-l16",
+        json.dumps({"original": True}), source_id="test")
+    # Tamper the content via DB
+    subprocess.run(
+        ["/opt/podman/bin/podman", "exec", "demo_postgres_1", "psql", "-U", "ledger", "-d", "ledger", "-c",
+         f"UPDATE are_ledger.ledger_entries SET content='tampered'::bytea WHERE entry_hash='{receipt.entry_hash}' AND entry_type='{etype}';"],
+        capture_output=True, text=True, timeout=10)
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert not v.valid, "Tampered entry should fail verification"
+
+@test("L16.05", "Receipt round-trip: issue → encode → decode → verify")
+def test_l16_05(c):
+    import base64
+    etype = f"test.l16.roundtrip.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "agent-l16",
+        json.dumps({"guardrail": "toxicity_check", "passed": True}),
+        source_id="authbridge-test", correlation_id="trace-roundtrip")
+    # Encode as compact header
+    compact = json.dumps({"h": receipt.entry_hash, "t": etype,
+                          "p": receipt.chain_position, "ts": receipt.written_ts})
+    encoded = base64.urlsafe_b64encode(compact.encode()).decode()
+    # Decode
+    decoded = json.loads(base64.urlsafe_b64decode(encoded))
+    # Verify using decoded receipt
+    v = c.verify_proof(decoded["h"], decoded["t"])
+    assert v.valid, f"Round-trip verification failed: {v.failure_reason}"
+    assert v.chain_position == decoded["p"], "Position mismatch after round-trip"
+
+@test("L16.06", "Multiple receipts for same correlation_id form chain of trust")
+def test_l16_06(c):
+    corr = f"trust-chain-{uuid.uuid4().hex[:8]}"
+    r1 = c.issue_receipt("authbridge.guardrail", "proxy-a",
+        json.dumps({"step": "guardrail", "result": "clean"}),
+        source_id="authbridge", correlation_id=corr)
+    r2 = c.issue_receipt("gateway.routing", "gateway-b",
+        json.dumps({"step": "routing", "target": "mcp-server-1"}),
+        source_id="mcp-gateway", correlation_id=corr)
+    r3 = c.issue_receipt("mcp.tool.executed", "mcp-server-c",
+        json.dumps({"step": "execution", "tool": "search"}),
+        source_id="mcp-server", correlation_id=corr)
+    # All three receipts verifiable
+    assert c.verify_proof(r1.entry_hash, "authbridge.guardrail").valid
+    assert c.verify_proof(r2.entry_hash, "gateway.routing").valid
+    assert c.verify_proof(r3.entry_hash, "mcp.tool.executed").valid
+    # All linked by correlation_id
+    entries = c.query(correlation_id=corr)
+    assert len(entries) == 3, f"Expected 3 entries for trust chain, got {len(entries)}"
+    sources = set(e.source_id for e in entries)
+    assert len(sources) == 3, f"Expected 3 sources, got {sources}"
+
+@test("L16.07", "Receipt from one source verifiable by another")
+def test_l16_07(c):
+    etype = f"test.l16.cross.{uuid.uuid4().hex[:8]}"
+    # AuthBridge issues receipt
+    receipt = c.issue_receipt(etype, "authbridge-proxy",
+        json.dumps({"validated": True}), source_id="authbridge")
+    # MCP Gateway verifies it (different "service" context, same client for test)
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid, "Cross-service verification should work"
+    assert v.agent_id == "authbridge-proxy", "Should see the original issuer"
 
 
 LIVE_TESTS = [

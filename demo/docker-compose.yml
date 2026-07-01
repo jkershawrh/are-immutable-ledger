@@ -11,6 +11,7 @@ services:
       - ../migrations/001_init.sql:/docker-entrypoint-initdb.d/01-init.sql
       - ../migrations/002_correlation_id_text.sql:/docker-entrypoint-initdb.d/02-correlation-id.sql
       - ./postgres-init/03-permissions.sql:/docker-entrypoint-initdb.d/03-permissions.sql
+      - ../migrations/003_hash_index.sql:/docker-entrypoint-initdb.d/04-hash-index.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ledger"]
       interval: 2s

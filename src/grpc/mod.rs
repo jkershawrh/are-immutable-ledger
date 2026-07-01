@@ -198,6 +198,61 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
             written_ts: tip.written_ts.timestamp_millis(),
         }))
     }
+
+    async fn issue_receipt(
+        &self,
+        request: Request<pb::WriteEntryRequest>,
+    ) -> Result<Response<pb::ProofReceipt>, Status> {
+        let input = request.get_ref();
+        let write_input = crate::service::WriteEntryInput {
+            entry_type: input.entry_type.clone(),
+            agent_id: input.agent_id.clone(),
+            content: input.content.clone(),
+            content_type: input.content_type.clone(),
+            source_id: input.source_id.clone(),
+            correlation_id: if input.correlation_id.is_empty() {
+                None
+            } else {
+                Some(input.correlation_id.clone())
+            },
+            idempotency_key: if input.idempotency_key.is_empty() {
+                None
+            } else {
+                Some(input.idempotency_key.clone())
+            },
+        };
+        let receipt = self.service.issue_receipt(write_input).await.map_err(map_err)?;
+        Ok(Response::new(pb::ProofReceipt {
+            entry_hash: receipt.entry_hash,
+            entry_type: input.entry_type.clone(),
+            chain_position: receipt.chain_position,
+            written_ts: receipt.written_ts_ms,
+            entry_id: receipt.entry_id.to_string(),
+        }))
+    }
+
+    async fn verify_proof(
+        &self,
+        request: Request<pb::VerifyProofRequest>,
+    ) -> Result<Response<pb::VerifyProofResponse>, Status> {
+        let input = request.get_ref();
+        if input.entry_hash.is_empty() || input.entry_type.is_empty() {
+            return Err(Status::invalid_argument("entry_hash and entry_type are required"));
+        }
+        let output = self
+            .service
+            .verify_proof(&input.entry_type, &input.entry_hash)
+            .await
+            .map_err(map_err)?;
+        Ok(Response::new(pb::VerifyProofResponse {
+            valid: output.valid,
+            entry_type: output.entry_type,
+            agent_id: output.agent_id,
+            written_ts: output.written_ts_ms,
+            chain_position: output.chain_position,
+            failure_reason: output.failure_reason,
+        }))
+    }
 }
 
 fn parse_uuid(raw: &str) -> Result<Uuid, Status> {

@@ -48,6 +48,25 @@ pub struct VerifyChainOutput {
     pub failure_reason: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct ProofReceiptOutput {
+    pub entry_hash: String,
+    pub entry_type: String,
+    pub chain_position: i64,
+    pub written_ts_ms: i64,
+    pub entry_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct VerifyProofOutput {
+    pub valid: bool,
+    pub entry_type: String,
+    pub agent_id: String,
+    pub written_ts_ms: i64,
+    pub chain_position: i64,
+    pub failure_reason: String,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct QueryEntriesInput {
     pub entry_type: Option<String>,
@@ -460,6 +479,60 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
         entry_type: &str,
     ) -> Result<crate::repository::ChainTip, ServiceError> {
         self.repo.get_chain_tip(entry_type).await.map_err(map_repo)
+    }
+
+    pub async fn issue_receipt(
+        &self,
+        input: WriteEntryInput,
+    ) -> Result<ProofReceiptOutput, ServiceError> {
+        let write = self.write_entry(input).await?;
+        Ok(ProofReceiptOutput {
+            entry_hash: write.entry_hash,
+            entry_type: String::new(),
+            chain_position: write.chain_position,
+            written_ts_ms: write.written_ts_ms,
+            entry_id: write.entry_id,
+        })
+    }
+
+    pub async fn verify_proof(
+        &self,
+        entry_type: &str,
+        entry_hash: &str,
+    ) -> Result<VerifyProofOutput, ServiceError> {
+        let entry = self
+            .repo
+            .get_entry_by_hash(entry_type, entry_hash)
+            .await
+            .map_err(map_repo)?;
+
+        let computed = canonical_entry_hash(&CanonicalEntryHashInput {
+            entry_id: entry.entry_id,
+            entry_type: &entry.entry_type,
+            agent_id: &entry.agent_id,
+            content: &entry.content,
+            content_type: &entry.content_type,
+            source_id: &entry.source_id,
+            correlation_id: entry.correlation_id.as_deref(),
+            idempotency_key: entry.idempotency_key.as_deref(),
+            chain_position: entry.chain_position,
+            written_ts_ms: entry.written_ts.timestamp_millis(),
+            previous_hash: &entry.previous_hash,
+        });
+
+        let hash_valid = computed == entry.entry_hash;
+        Ok(VerifyProofOutput {
+            valid: hash_valid,
+            entry_type: entry.entry_type,
+            agent_id: entry.agent_id,
+            written_ts_ms: entry.written_ts.timestamp_millis(),
+            chain_position: entry.chain_position,
+            failure_reason: if hash_valid {
+                String::new()
+            } else {
+                "entry_hash_mismatch".to_string()
+            },
+        })
     }
 }
 
