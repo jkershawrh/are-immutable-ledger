@@ -6,3 +6,4 @@ sdks/python/generated/*.pyc
 .env
 reports/
 node_modules/
+docs/
