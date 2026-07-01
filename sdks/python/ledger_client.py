@@ -13,7 +13,9 @@ import immutable_ledger_pb2_grpc as pb_grpc
 
 class LedgerClient:
     def __init__(self, endpoint="localhost:19292", api_token=None):
-        self.channel = grpc.insecure_channel(endpoint)
+        self.channel = grpc.insecure_channel(endpoint, options=[
+            ('grpc.max_receive_message_length', 50 * 1024 * 1024),
+        ])
         self.stub = pb_grpc.ImmutableLedgerServiceStub(self.channel)
         token = api_token or os.environ.get("ARE_LEDGER_API_TOKEN", "")
         self.metadata = (("authorization", f"Bearer {token}"),) if token else None
