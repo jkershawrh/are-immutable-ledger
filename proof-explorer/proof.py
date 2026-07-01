@@ -312,8 +312,116 @@ def cmd_drift(args, client):
           f"{len(scope_evals)} scope evaluations found.\n")
 
 
+def cmd_receipt_issue(args, client):
+    import hashlib as hl
+    content = args.content
+    input_hash = args.input_hash or ""
+    if args.hash_payload and not input_hash:
+        input_hash = hl.sha256(content.encode()).hexdigest()
+
+    receipt = client.issue_receipt(
+        entry_type=args.type,
+        agent_id=args.agent,
+        content=content,
+        source_id=args.source or "",
+        correlation_id=args.correlation_id or "",
+        input_hash=input_hash,
+    )
+    print(f"\n{BOLD}  Receipt Issued{RESET}\n")
+    print(f"  Entry Hash:     {GREEN}{receipt.entry_hash}{RESET}")
+    print(f"  Entry Type:     {receipt.entry_type}")
+    print(f"  Chain Position: {receipt.chain_position}")
+    print(f"  Timestamp:      {format_ts(receipt.written_ts)}")
+    print(f"  Entry ID:       {DIM}{receipt.entry_id}{RESET}")
+    if receipt.input_hash:
+        print(f"  Input Hash:     {receipt.input_hash}")
+
+    import base64
+    compact = json.dumps({"h": receipt.entry_hash, "t": receipt.entry_type,
+                          "p": receipt.chain_position, "ts": receipt.written_ts,
+                          "ih": receipt.input_hash})
+    encoded = base64.urlsafe_b64encode(compact.encode()).decode()
+    print(f"\n  {DIM}X-Proof-Receipt: {encoded[:60]}...{RESET}\n")
+
+
+def cmd_receipt_verify(args, client):
+    v = client.verify_proof(args.hash, args.type)
+    status_color = GREEN if v.valid else RED
+    print(f"\n{BOLD}  Receipt Verification{RESET}\n")
+    print(f"  Valid:          {status_color}{'YES' if v.valid else 'NO'}{RESET}")
+    if v.failure_reason:
+        print(f"  Failure:        {RED}{v.failure_reason}{RESET}")
+    print(f"  Entry Type:     {v.entry_type}")
+    print(f"  Agent ID:       {v.agent_id}")
+    print(f"  Source ID:      {v.source_id}")
+    print(f"  Correlation ID: {v.correlation_id}")
+    print(f"  Content Type:   {v.content_type}")
+    print(f"  Timestamp:      {format_ts(v.written_ts)}")
+    print(f"  Chain Position: {v.chain_position}")
+    if v.input_hash:
+        print(f"  Input Hash:     {v.input_hash}")
+    print()
+
+
+def cmd_receipt_get(args, client):
+    entry = client.get_entry_by_hash(args.hash, args.type)
+    print(f"\n{BOLD}  Entry by Hash{RESET}\n")
+    print(f"  Entry ID:       {entry.entry_id}")
+    print(f"  Entry Type:     {entry.entry_type}")
+    print(f"  Agent ID:       {entry.agent_id}")
+    print(f"  Source ID:      {entry.source_id}")
+    print(f"  Correlation ID: {entry.correlation_id}")
+    print(f"  Content Type:   {entry.content_type}")
+    print(f"  Chain Position: {entry.chain_position}")
+    print(f"  Entry Hash:     {DIM}{entry.entry_hash}{RESET}")
+    print(f"  Previous Hash:  {DIM}{entry.previous_hash}{RESET}")
+    if hasattr(entry, 'input_hash') and entry.input_hash:
+        print(f"  Input Hash:     {entry.input_hash}")
+    print(f"  Timestamp:      {format_ts(entry.written_ts)}")
+    try:
+        content = json.loads(entry.content.decode("utf-8"))
+        print(f"\n  Content:")
+        for k, v in content.items():
+            print(f"    {DIM}{k}:{RESET} {v}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        print(f"\n  Content: {DIM}(binary, {len(entry.content)} bytes){RESET}")
+    print()
+
+
+def cmd_receipt_chain(args, client):
+    entries = client.query(correlation_id=args.correlation_id)
+    sorted_entries = sorted(entries, key=lambda e: e.written_ts)
+    sources = set(e.source_id for e in sorted_entries)
+
+    print(f"\n{BOLD}  Trust Chain: {args.correlation_id}{RESET}")
+    print(f"  {len(sorted_entries)} hops • {len(sources)} sources\n")
+
+    for i, e in enumerate(sorted_entries):
+        color = sourceColor(e.source_id)
+        ts = format_ts(e.written_ts)
+        ih = ""
+        if hasattr(e, 'input_hash') and e.input_hash:
+            ih = f" ih={e.input_hash[:12]}..."
+        connector = "  ┌─" if i == 0 else "  ├─" if i < len(sorted_entries) - 1 else "  └─"
+        print(f"  {connector} {ts}  {color}{e.source_id:<25}{RESET}  {e.entry_type:<35}  hash={e.entry_hash[:16]}...{ih}")
+
+    print()
+
+
+def sourceColor(source):
+    if "openshell" in source:
+        return GREEN
+    if "kagenti" in source:
+        return PURPLE
+    if "gov" in source:
+        return BLUE
+    if "standalone" in source:
+        return YELLOW
+    return ""
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Proof Explorer — query, verify, and analyze the immutable ledger")
+    parser = argparse.ArgumentParser(description="Proof Explorer — query, verify, analyze, and manage receipts")
     parser.add_argument("--endpoint", default="localhost:19292", help="Ledger gRPC endpoint")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -338,6 +446,27 @@ def main():
     d = sub.add_parser("drift", help="Detect authorization gaps")
     d.add_argument("--agent-id", help="Check specific agent")
 
+    # Receipt commands
+    ri = sub.add_parser("receipt-issue", help="Issue a proof receipt")
+    ri.add_argument("--type", required=True, help="Entry type (e.g., guardrail.pii_scan)")
+    ri.add_argument("--agent", required=True, help="Agent ID (who is issuing)")
+    ri.add_argument("--content", required=True, help="JSON content of the check result")
+    ri.add_argument("--source", help="Source ID")
+    ri.add_argument("--correlation-id", help="Correlation/trace ID")
+    ri.add_argument("--input-hash", help="SHA-256 of the payload that was checked")
+    ri.add_argument("--hash-payload", action="store_true", help="Auto-hash the content as input_hash")
+
+    rv = sub.add_parser("receipt-verify", help="Verify a proof receipt by hash")
+    rv.add_argument("--hash", required=True, help="Entry hash from the receipt")
+    rv.add_argument("--type", required=True, help="Entry type")
+
+    rg = sub.add_parser("receipt-get", help="Get full entry content by hash")
+    rg.add_argument("--hash", required=True, help="Entry hash")
+    rg.add_argument("--type", required=True, help="Entry type")
+
+    rc = sub.add_parser("receipt-chain", help="Show trust chain for a correlation ID")
+    rc.add_argument("--correlation-id", required=True, help="Correlation/trace ID")
+
     args = parser.parse_args()
     client = LedgerClient(args.endpoint)
 
@@ -347,6 +476,10 @@ def main():
         "verify": cmd_verify,
         "summary": cmd_summary,
         "drift": cmd_drift,
+        "receipt-issue": cmd_receipt_issue,
+        "receipt-verify": cmd_receipt_verify,
+        "receipt-get": cmd_receipt_get,
+        "receipt-chain": cmd_receipt_chain,
     }
 
     try:

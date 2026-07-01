@@ -1,4 +1,17 @@
-"""REST API gateway — wraps the ledger gRPC service for the frontend."""
+"""REST API — full ledger surface for frontends, CLIs, and external integrations.
+
+Read/audit endpoints:
+  GET  /api/entries, /api/summary, /api/chains, /api/verify, /api/timeline, /api/drift
+
+Write endpoints:
+  POST /api/entries              — WriteEntry
+  POST /api/receipts             — IssueReceipt (write + get proof hash)
+
+Receipt verification:
+  GET  /api/receipts/verify      — VerifyProof by hash + type
+  GET  /api/entries/by-hash      — GetEntryByHash (full content by hash)
+  GET  /api/receipts/chain       — trust chain for a correlation_id
+"""
 
 import json
 import os
@@ -41,7 +54,107 @@ def entry_to_dict(e):
     }
 
 
-@app.route("/api/entries")
+@app.route("/api/entries", methods=["POST"])
+def write_entry():
+    c = get_client()
+    body = request.get_json()
+    resp = c.write(
+        entry_type=body.get("entry_type", ""),
+        agent_id=body.get("agent_id", ""),
+        content=body.get("content", ""),
+        content_type=body.get("content_type", "application/json"),
+        source_id=body.get("source_id", ""),
+        correlation_id=body.get("correlation_id", ""),
+        idempotency_key=body.get("idempotency_key", ""),
+        input_hash=body.get("input_hash", ""),
+    )
+    c.close()
+    return jsonify({
+        "entry_id": resp.entry_id,
+        "entry_hash": resp.entry_hash,
+        "chain_position": resp.chain_position,
+        "written_ts": resp.written_ts,
+    }), 201
+
+
+@app.route("/api/receipts", methods=["POST"])
+def issue_receipt():
+    c = get_client()
+    body = request.get_json()
+    receipt = c.issue_receipt(
+        entry_type=body.get("entry_type", ""),
+        agent_id=body.get("agent_id", ""),
+        content=body.get("content", ""),
+        content_type=body.get("content_type", "application/json"),
+        source_id=body.get("source_id", ""),
+        correlation_id=body.get("correlation_id", ""),
+        idempotency_key=body.get("idempotency_key", ""),
+        input_hash=body.get("input_hash", ""),
+    )
+    c.close()
+    return jsonify({
+        "entry_hash": receipt.entry_hash,
+        "entry_type": receipt.entry_type,
+        "chain_position": receipt.chain_position,
+        "written_ts": receipt.written_ts,
+        "entry_id": receipt.entry_id,
+        "input_hash": receipt.input_hash,
+    }), 201
+
+
+@app.route("/api/receipts/verify")
+def verify_proof():
+    c = get_client()
+    entry_hash = request.args.get("hash", "")
+    entry_type = request.args.get("type", "")
+    if not entry_hash or not entry_type:
+        return jsonify({"error": "hash and type query params required"}), 400
+    v = c.verify_proof(entry_hash, entry_type)
+    c.close()
+    return jsonify({
+        "valid": v.valid,
+        "entry_type": v.entry_type,
+        "agent_id": v.agent_id,
+        "source_id": v.source_id,
+        "correlation_id": v.correlation_id,
+        "content_type": v.content_type,
+        "input_hash": v.input_hash,
+        "written_ts": v.written_ts,
+        "chain_position": v.chain_position,
+        "failure_reason": v.failure_reason or "",
+    })
+
+
+@app.route("/api/entries/by-hash")
+def get_entry_by_hash():
+    c = get_client()
+    entry_hash = request.args.get("hash", "")
+    entry_type = request.args.get("type", "")
+    if not entry_hash or not entry_type:
+        return jsonify({"error": "hash and type query params required"}), 400
+    entry = c.get_entry_by_hash(entry_hash, entry_type)
+    c.close()
+    return jsonify(entry_to_dict(entry))
+
+
+@app.route("/api/receipts/chain")
+def receipt_chain():
+    c = get_client()
+    corr = request.args.get("correlation_id", "")
+    if not corr:
+        return jsonify({"error": "correlation_id query param required"}), 400
+    entries = c.query(correlation_id=corr)
+    c.close()
+    sorted_entries = sorted(entries, key=lambda e: e.written_ts)
+    return jsonify({
+        "correlation_id": corr,
+        "hops": len(sorted_entries),
+        "sources": list(set(e.source_id for e in sorted_entries)),
+        "entries": [entry_to_dict(e) for e in sorted_entries],
+    })
+
+
+@app.route("/api/entries", methods=["GET"])
 def get_entries():
     c = get_client()
     kwargs = {}
