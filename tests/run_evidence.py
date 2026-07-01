@@ -1075,9 +1075,6 @@ ALL_TESTS = [
     test_l12_07, test_l12_08, test_l12_10,
     # L14: Synthetic Testing (4 tests)
     test_l14_01, test_l14_02, test_l14_03, test_l14_05,
-    # L16: Proof Receipts (7 tests)
-    test_l16_01, test_l16_02, test_l16_03, test_l16_04, test_l16_05,
-    test_l16_06, test_l16_07,
 ]
 
 # ─── L9: Live Integration (optional, requires --live) ────
@@ -1373,6 +1370,8 @@ LIVE_TESTS = [
     test_l9_01, test_l9_02, test_l9_03, test_l9_04, test_l9_05,
     test_l13_01, test_l13_02, test_l13_03, test_l13_04, test_l13_05,
     test_l15_01, test_l15_02, test_l15_03, test_l15_04, test_l15_05,
+    test_l16_01, test_l16_02, test_l16_03, test_l16_04, test_l16_05,
+    test_l16_06, test_l16_07,
 ]
 
 
