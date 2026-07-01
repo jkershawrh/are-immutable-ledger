@@ -111,7 +111,7 @@ python proof-explorer/proof.py verify --all
 
 # Detect authorization gaps
 python proof-explorer/proof.py drift --agent-id agt-demo-001
-# "POST api.github.com denied by OpenShell but no ARE scope evaluation found"
+# "POST api.github.com denied by OpenShell but no governance scope evaluation found"
 ```
 
 ## Adapters

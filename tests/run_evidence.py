@@ -552,7 +552,7 @@ def test_l8_03(c):
 
 @test("L8.05", "Three independent chains verify clean after sample load")
 def test_l8_05(c):
-    for prefix in ["are.", "openshell.", "kagenti."]:
+    for prefix in ["gov.", "openshell.", "kagenti."]:
         entries = c.query(entry_type=prefix)
         if entries:
             types = set(e.entry_type for e in entries)
@@ -972,10 +972,10 @@ def test_l12_10(c):
 def test_l14_01(c):
     session = f"synth-{uuid.uuid4().hex[:8]}"
     events = [
-        ("are.passport.issued", "agt-synth", "are-synth"),
+        ("gov.passport.issued", "agt-synth", "gov-synth"),
         ("kagenti.agent.deployed", "spiffe://synth", "kagenti-synth"),
         ("openshell.sandbox.created", "sbx-synth", "openshell-synth"),
-        ("are.scope.evaluated", "agt-synth", "are-synth"),
+        ("gov.scope.evaluated", "agt-synth", "gov-synth"),
         ("kagenti.tool.call", "spiffe://synth", "kagenti-synth"),
         ("openshell.http_activity", "sbx-synth", "openshell-synth"),
         ("kagenti.tool.call", "spiffe://synth", "kagenti-synth"),

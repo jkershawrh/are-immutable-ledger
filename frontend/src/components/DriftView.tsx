@@ -72,7 +72,7 @@ export function DriftView() {
                 <div><span style={{ color: 'var(--text-dim)' }}>Type:</span> <span className="hash">{gap.entry_type}</span></div>
               </div>
               <div style={{ marginTop: 8, fontSize: 11, color: 'var(--orange)', fontFamily: 'var(--font-mono)' }}>
-                Denied by sandbox but no ARE scope evaluation found for this correlation
+                Denied by sandbox but no governance scope evaluation found for this correlation
               </div>
             </motion.div>
           ))}

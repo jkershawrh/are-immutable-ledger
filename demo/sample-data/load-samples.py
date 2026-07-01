@@ -23,7 +23,7 @@ BASE_TS = int(time.time() * 1000)
 EVENTS = [
     # --- Governance authority decisions ---
     {
-        "entry_type": "are.agent.registered",
+        "entry_type": "gov.agent.registered",
         "agent_id": "agt-demo-001",
         "source_id": "governance-service",
         "correlation_id": "session-demo-001",
@@ -36,7 +36,7 @@ EVENTS = [
         "offset_ms": 100,
     },
     {
-        "entry_type": "are.passport.issued",
+        "entry_type": "gov.passport.issued",
         "agent_id": "agt-demo-001",
         "source_id": "governance-service",
         "correlation_id": "session-demo-001",
@@ -53,7 +53,7 @@ EVENTS = [
         "offset_ms": 200,
     },
     {
-        "entry_type": "are.scope.evaluated",
+        "entry_type": "gov.scope.evaluated",
         "agent_id": "agt-demo-001",
         "source_id": "governance-service",
         "correlation_id": "session-demo-001",
@@ -209,7 +209,7 @@ def main():
 
     print(f"\n  {len(sorted_events)} entries loaded across 3 source systems.\n")
 
-    for entry_type_prefix in ["are.", "kagenti.", "openshell."]:
+    for entry_type_prefix in ["gov.", "kagenti.", "openshell."]:
         entries = client.query(entry_type=entry_type_prefix)
         if entries:
             types = set(e.entry_type for e in entries)
