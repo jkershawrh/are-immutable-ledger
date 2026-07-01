@@ -134,7 +134,6 @@ The demo shows three independent systems writing to the same ledger without know
 
 ```
 TIME          SOURCE      TYPE                         AGENT_ID         DETAIL
-10:00:00.100  are         are.passport.issued          agt-demo-001     scope: model.promote:model/*
 10:00:00.500  kagenti     kagenti.agent.deployed       spiffe://demo    image: model-agent:v3
 10:00:00.800  openshell   openshell.sandbox.created    sbx-demo-001     policy: github-readonly
 10:00:01.200  kagenti     kagenti.tool.call            spiffe://demo    tool: check-model  trace: aaa
@@ -173,10 +172,10 @@ Thin bridges for existing agentic systems:
 
 ```
 System A ──→ adapter ──→ ┌─────────────────────┐
-                         │  Immutable Ledger    │
-System B ──→ adapter ──→ │  (gRPC :19292)       │ ←── proof-explorer CLI
+                         │  Immutable Ledger   │
+System B ──→ adapter ──→ │  (gRPC :19292)      │ ←── proof-explorer CLI
                          │                     │
-System C ──→ direct  ──→ │  PostgreSQL (chains) │
+System C ──→ direct  ──→ │  PostgreSQL (chains)│
                          └─────────────────────┘
 ```
 
