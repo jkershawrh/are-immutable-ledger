@@ -1169,7 +1169,108 @@ def test_l9_05(c):
     assert multi_source > 0, \
         f"No cross-system correlations found ({len(corr_ids)} correlation IDs, all single-source)"
 
-LIVE_TESTS = [test_l9_01, test_l9_02, test_l9_03, test_l9_04, test_l9_05]
+# ─── L13: Kagenti Live Integration ───────────────────────
+
+@test("L13.01", "Kagenti OTEL collector is running and healthy")
+def test_l13_01(c):
+    import subprocess
+    result = subprocess.run(
+        ["kubectl", "get", "deploy", "otel-collector", "-n", "kagenti-system", "-o", "jsonpath={.status.readyReplicas}"],
+        capture_output=True, text=True, timeout=10)
+    assert result.stdout.strip() == "1", f"OTEL collector not ready: {result.stdout}"
+
+@test("L13.02", "Agent deployment produced OTEL traces in collector")
+def test_l13_02(c):
+    import subprocess
+    result = subprocess.run(
+        ["kubectl", "logs", "deploy/otel-collector", "-n", "kagenti-system", "--tail=200"],
+        capture_output=True, text=True, timeout=15)
+    assert "kagenti-live-agent" in result.stdout, "No traces from kagenti-live-agent found in collector logs"
+
+@test("L13.03", "Live OTEL spans written to ledger via adapter")
+def test_l13_03(c):
+    entries = c.query(source_id="kagenti-otel-collector-live")
+    assert len(entries) >= 5, f"Expected 5+ live Kagenti entries, got {len(entries)}"
+    types = set(e.entry_type for e in entries)
+    assert any("tool.call" in t for t in types), f"No tool.call entries found in {types}"
+
+@test("L13.04", "Real traceIds preserved as correlation_id")
+def test_l13_04(c):
+    entries = c.query(source_id="kagenti-otel-collector-live")
+    trace_ids = set(e.correlation_id for e in entries if e.correlation_id)
+    assert len(trace_ids) >= 1, "No trace IDs found in live Kagenti entries"
+    for tid in trace_ids:
+        assert len(tid) >= 16, f"Trace ID too short: {tid}"
+
+@test("L13.05", "Kagenti chains verify independently")
+def test_l13_05(c):
+    entries = c.query(source_id="kagenti-otel-collector-live")
+    types = set(e.entry_type for e in entries)
+    for t in types:
+        v = c.verify_chain(t)
+        assert v.chain_valid, f"Kagenti chain {t} invalid: {v.failure_reason}"
+
+
+# ─── L15: Cross-System Live Communication ─────────────────
+
+@test("L15.01", "OpenShell + Kagenti events coexist in ledger")
+def test_l15_01(c):
+    os_entries = [e for e in c.query() if "openshell" in e.source_id and "live" in e.source_id]
+    kg_entries = [e for e in c.query() if "kagenti" in e.source_id and "live" in e.source_id]
+    assert len(os_entries) > 0, "No live OpenShell entries"
+    assert len(kg_entries) > 0, "No live Kagenti entries"
+
+@test("L15.02", "Same trace ID returns entries from both sources")
+def test_l15_02(c):
+    all_entries = c.query()
+    live_entries = [e for e in all_entries if "live" in e.source_id and e.correlation_id]
+    corr_ids = set(e.correlation_id for e in live_entries)
+    found_cross = False
+    for cid in corr_ids:
+        sources = set(e.source_id for e in live_entries if e.correlation_id == cid)
+        if len(sources) >= 2:
+            found_cross = True
+            break
+    assert found_cross, f"No trace ID links entries from multiple live sources. IDs checked: {len(corr_ids)}"
+
+@test("L15.03", "Timeline shows chronological interleaving from both sources")
+def test_l15_03(c):
+    all_entries = c.query()
+    live_entries = sorted(
+        [e for e in all_entries if "live" in e.source_id],
+        key=lambda e: e.written_ts
+    )
+    sources_seen = set()
+    for e in live_entries:
+        sources_seen.add(e.source_id)
+    assert len(sources_seen) >= 2, f"Expected entries from 2+ live sources, got {sources_seen}"
+
+@test("L15.04", "Independent chain verification across both live sources")
+def test_l15_04(c):
+    all_entries = c.query()
+    live_entries = [e for e in all_entries if "live" in e.source_id]
+    types = set(e.entry_type for e in live_entries)
+    verified = 0
+    for t in types:
+        v = c.verify_chain(t)
+        assert v.chain_valid, f"Live chain {t} invalid: {v.failure_reason}"
+        verified += 1
+    assert verified >= 4, f"Expected 4+ live chain types verified, got {verified}"
+
+@test("L15.05", "Drift detection works across live sources")
+def test_l15_05(c):
+    all_entries = c.query()
+    live_denials = [e for e in all_entries if "live" in e.source_id and
+                    ("deny" in e.entry_type or "network_activity" in e.entry_type) and
+                    b"Denied" in e.content]
+    assert len(live_denials) >= 1, "Expected at least 1 live denial entry for drift check"
+
+
+LIVE_TESTS = [
+    test_l9_01, test_l9_02, test_l9_03, test_l9_04, test_l9_05,
+    test_l13_01, test_l13_02, test_l13_03, test_l13_04, test_l13_05,
+    test_l15_01, test_l15_02, test_l15_03, test_l15_04, test_l15_05,
+]
 
 
 def main():
