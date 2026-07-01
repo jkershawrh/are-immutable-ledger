@@ -93,8 +93,8 @@ def get_chains():
             source = "openshell"
         elif "kagenti" in entry_type:
             source = "kagenti"
-        elif "are." in entry_type:
-            source = "are"
+        elif "gov." in entry_type:
+            source = "governance"
         elif "standalone" in entry_type:
             source = "standalone"
         chains.append({
