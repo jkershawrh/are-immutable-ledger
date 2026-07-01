@@ -19,17 +19,18 @@ The ledger answers three questions for any agentic system:
 One gRPC call. Your identity. Your event format. Chained and verifiable.
 
 ```protobuf
+// Core write + audit
 rpc WriteEntry(WriteEntryRequest) returns (WriteEntryResponse);
 
-message WriteEntryRequest {
-  string entry_type = 1;       // your namespace: "openshell.*", "kagenti.*", "myagent.*"
-  string agent_id = 2;         // YOUR identity — sandbox ID, SPIFFE SVID, whatever you use
-  bytes  content = 3;          // YOUR event format — OCSF, OTLP, JSON, protobuf
-  string content_type = 4;     // "application/ocsf+json", "application/otlp+json", etc.
-  string source_id = 5;        // your system name
-  string correlation_id = 6;   // W3C trace-id, X-Request-ID, or any cross-system join key
-  string idempotency_key = 7;  // safe retries
-}
+// Proof receipts — runtime trust propagation
+rpc IssueReceipt(WriteEntryRequest) returns (ProofReceipt);
+rpc VerifyProof(VerifyProofRequest) returns (VerifyProofResponse);
+rpc GetEntryByHash(GetEntryByHashRequest) returns (GetEntryResponse);
+
+// Chain verification + query
+rpc VerifyEntry(VerifyEntryRequest) returns (VerifyEntryResponse);
+rpc VerifyChain(VerifyChainRequest) returns (VerifyChainResponse);
+rpc QueryEntries(QueryEntriesRequest) returns (QueryEntriesResponse);
 ```
 
 No shared identity system required. No event format standardization required. Each system keeps its own IDs and its own event schema. The ledger chains entries per `entry_type`, so each source maintains an independent, verifiable hash chain.
@@ -194,15 +195,17 @@ The current implementation is intentionally small and correctness-first. A pract
 ## Project Structure
 
 ```
-proto/                     The universal contract (immutable_ledger.proto)
+proto/                     The universal contract (10 RPCs)
 src/                       Ledger server (Rust, gRPC, PostgreSQL)
-migrations/                Database schema (append-only constraints)
-sdks/python/               Python client SDK
+migrations/                Database schema (append-only constraints + hash index)
+sdks/python/               Python client SDK (WriteEntry, IssueReceipt, VerifyProof, GetEntryByHash)
 adapters/ocsf/             OpenShell OCSF event bridge
 adapters/otel/             Kagenti/OTEL span bridge
-proof-explorer/            Query, verify, and timeline CLI
+proof-explorer/            Query, verify, timeline, and drift CLI
+api/                       REST gateway for frontend (Flask)
+frontend/                  7-act narrative proof explorer (React + Vite + motion)
 demo/                      Self-contained demo with compose
-tests/                     Integration and gRPC contract tests
+tests/                     Evidence matrix: 116 tests across 18 categories
 ```
 
 ## Why This Exists

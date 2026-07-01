@@ -141,17 +141,33 @@ export default function App() {
                   'Not a replacement for QLDB or immudb. A cross-system layer that sits above them. Each source keeps its own hash chain. A single query correlates across all sources by trace ID, agent ID, or time range.',
                 ]} />
                 <SystemDiagram />
-                <div className="card" style={{ marginTop: 16, borderColor: 'var(--border)' }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', fontFamily: 'var(--font-display)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
-                    The contract
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+                  <div className="card" style={{ borderColor: 'var(--border)' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', fontFamily: 'var(--font-display)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+                      Write
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+                      <span style={{ color: 'var(--purple)' }}>IssueReceipt</span>{'('}<br/>
+                      {'  '}<span style={{ color: 'var(--text-dim)' }}>entry_type:</span> <span style={{ color: 'var(--green)' }}>"guardrail.pii_scan"</span><br/>
+                      {'  '}<span style={{ color: 'var(--text-dim)' }}>agent_id:</span> <span style={{ color: 'var(--green)' }}>"authbridge-proxy"</span><br/>
+                      {'  '}<span style={{ color: 'var(--text-dim)' }}>content:</span> <span style={{ color: 'var(--green)' }}>{'{'}"result":"clean"{'}'}</span><br/>
+                      {'  '}<span style={{ color: 'var(--text-dim)' }}>correlation_id:</span> <span style={{ color: 'var(--green)' }}>"trace-aaa"</span><br/>
+                      {')'}<br/>
+                      <span style={{ color: 'var(--text-disabled)' }}>→ ProofReceipt {'{'} hash, type, position, ts {'}'}</span>
+                    </div>
                   </div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-                    <span style={{ color: 'var(--purple)' }}>WriteEntry</span>{'('}<br/>
-                    {'  '}<span style={{ color: 'var(--text-dim)' }}>entry_type:</span> <span style={{ color: 'var(--green)' }}>"openshell.network_activity"</span> <span style={{ color: 'var(--text-disabled)' }}>// your namespace</span><br/>
-                    {'  '}<span style={{ color: 'var(--text-dim)' }}>agent_id:</span> <span style={{ color: 'var(--green)' }}>"sbx-abc123"</span> <span style={{ color: 'var(--text-disabled)' }}>// your identity</span><br/>
-                    {'  '}<span style={{ color: 'var(--text-dim)' }}>content:</span> <span style={{ color: 'var(--green)' }}>{'<'}raw OCSF bytes{'>'}</span> <span style={{ color: 'var(--text-disabled)' }}>// your format</span><br/>
-                    {'  '}<span style={{ color: 'var(--text-dim)' }}>correlation_id:</span> <span style={{ color: 'var(--green)' }}>"trace-aaa"</span> <span style={{ color: 'var(--text-disabled)' }}>// the cross-system join key</span><br/>
-                    {')'}
+                  <div className="card" style={{ borderColor: 'var(--border)' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', fontFamily: 'var(--font-display)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+                      Verify
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+                      <span style={{ color: 'var(--cyan)' }}>VerifyProof</span>{'('}<br/>
+                      {'  '}<span style={{ color: 'var(--text-dim)' }}>hash:</span> <span style={{ color: 'var(--green)' }}>"abc123..."</span><br/>
+                      {'  '}<span style={{ color: 'var(--text-dim)' }}>type:</span> <span style={{ color: 'var(--green)' }}>"guardrail.pii_scan"</span><br/>
+                      {')'}<br/>
+                      <span style={{ color: 'var(--text-disabled)' }}>→ {'{'} valid, agent, source, corr_id, ts {'}'}</span><br/><br/>
+                      <span style={{ color: 'var(--cyan)' }}>GetEntryByHash</span> <span style={{ color: 'var(--text-disabled)' }}>→ full content</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -187,7 +203,7 @@ export default function App() {
               <div>
                 <h3 style={{ marginBottom: 8 }}><SectionNum n="04" /> The Ordeal</h3>
                 <SectionContext lines={[
-                  '92 automated tests: SQL injection, write floods, forged entries, deleted rows, hash tampering, cross-chain contamination, replay attacks, content size abuse, and restart survival. All GREEN.',
+                  '116 automated tests across 18 categories. SQL injection, write floods, forged entries, deleted rows, hash tampering, cross-chain contamination, replay attacks, and restart survival. Plus receipt-specific attacks: forged hashes, cross-type theft, content swaps, agent impersonation, correlation rebinding, and idempotency conflicts. All GREEN.',
                   'The database enforces append-only at the permission level — the application role cannot UPDATE or DELETE entries. The service verifies this at startup and refuses to run if the constraint is missing.',
                 ]} />
                 <VerifyView />
@@ -221,19 +237,28 @@ export default function App() {
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--blue)', fontFamily: 'var(--font-display)', marginBottom: 16 }}>
                     What the ledger proves — and what it doesn't
                   </div>
-                  <ClosingPoint text="Proves: entries were not modified after submission. SHA-256 hash chaining with per-entry verification." />
+                  <ClosingPoint text="Proves: entries were not modified after submission. V2 canonical hash commits to all fields — content, agent, source, correlation, chain position, timestamp." />
+                  <ClosingPoint text="Proves: proof receipts are tamper-evident. Swap the content, agent, or correlation ID and verification fails." />
                   <ClosingPoint text="Proves: cross-system events are correlatable by trace ID without shared identity." />
-                  <ClosingPoint text="Proves: authorization gaps are detectable across system boundaries." />
-                  <ClosingPoint text="Does not prove: events are accurate when submitted. Attestation is the writer's responsibility. If OpenShell lies about a decision, the ledger faithfully chains the lie. Integrity ≠ accuracy." />
+                  <ClosingPoint text="Does not prove: events are accurate when submitted. Attestation is the writer's responsibility. Receipts prove a claim was made, not that it's true. Integrity ≠ accuracy." />
+                </div>
+
+                <div className="card" style={{ marginBottom: 24, borderColor: 'var(--cyan-border)' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--cyan)', fontFamily: 'var(--font-display)', marginBottom: 16 }}>
+                    Proof receipts — runtime trust propagation
+                  </div>
+                  <ClosingPoint text="IssueReceipt writes an entry and returns a compact ProofReceipt. The receipt travels as an HTTP header to the next service." />
+                  <ClosingPoint text="VerifyProof validates the receipt by hash — returns the issuer, source, correlation, and content type. Fast (0.6ms p50). No need to re-run the check." />
+                  <ClosingPoint text="GetEntryByHash retrieves full content when the verifier needs details. Two-step pattern: verify first (cheap), read content second (only if needed)." />
+                  <ClosingPoint text="Eliminates redundant guardrails across multi-hop architectures. Each service checks once, proves it, and downstream trusts the proof." />
                 </div>
 
                 <div className="card" style={{ marginBottom: 24, borderColor: 'var(--green-border)' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--green)', fontFamily: 'var(--font-display)', marginBottom: 16 }}>
                     Why not QLDB, immudb, or a managed ledger?
                   </div>
-                  <ClosingPoint text="Those are single-system immutable stores. They prove their own entries weren't tampered with. They don't correlate across independent systems with different identities and event formats." />
-                  <ClosingPoint text="This ledger provides independent per-source chains (compromise one, others unaffected), cross-system correlation queries, and agent-aware adapters for OCSF and OTEL." />
-                  <ClosingPoint text="It's not a replacement for QLDB. It's the cross-system layer above any single-system store." />
+                  <ClosingPoint text="Single-system immutable stores prove their own entries. They don't correlate across independent systems, issue portable proof receipts, or provide agent-aware adapters." />
+                  <ClosingPoint text="This ledger adds: independent per-source chains, cross-system correlation, receipt issuance and verification, and adapters for OCSF and OTEL." />
                 </div>
 
                 <div className="card" style={{ marginBottom: 24, borderColor: 'var(--purple-border)' }}>
@@ -241,8 +266,8 @@ export default function App() {
                     The ecosystem gap
                   </div>
                   <ClosingPoint text="MCP standardizes agent-to-tool communication. OpenShell sandboxes agent execution. Kagenti orchestrates agent fleets. AGT provides per-framework governance gates." />
-                  <ClosingPoint text="None of them provides a neutral, cross-system, cryptographically verifiable proof chain." />
-                  <ClosingPoint text="This is a proposal for the AAIF Observability & Traceability Working Group. The contract is defined. The reference implementation is Apache-2.0. The adapters work with real systems. We're seeking feedback on the verification model and the integration pattern." />
+                  <ClosingPoint text="None of them provides a neutral, cross-system, cryptographically verifiable proof chain with portable receipts." />
+                  <ClosingPoint text="We're seeking feedback on the verification model, the receipt primitive, and the integration pattern." />
                 </div>
 
                 <div className="card" style={{ marginBottom: 24, borderColor: 'var(--border)' }}>
@@ -250,10 +275,10 @@ export default function App() {
                     Evidence depth
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
-                    <EvidenceStat value="92" label="automated tests" />
-                    <EvidenceStat value="15" label="test categories" />
-                    <EvidenceStat value="10" label="security tests (SQL injection, null bytes, unicode)" />
-                    <EvidenceStat value="8" label="adversarial tests (floods, forged entries, replay)" />
+                    <EvidenceStat value="116" label="automated tests" />
+                    <EvidenceStat value="18" label="test categories" />
+                    <EvidenceStat value="10" label="security tests (injection, validation, permissions)" />
+                    <EvidenceStat value="20" label="adversarial + receipt red team" />
                     <EvidenceStat value="2" label="live systems tested (OpenShell + Kagenti)" />
                     <EvidenceStat value="0" label="tests failing" />
                   </div>
