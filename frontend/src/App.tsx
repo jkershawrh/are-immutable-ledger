@@ -69,7 +69,7 @@ export default function App() {
           transition={{ delay: 0.8, duration: 0.8 }}
           style={{ fontSize: 13, color: 'var(--text-dim)', letterSpacing: 1, marginBottom: 48 }}
         >
-          universal proof chain for agentic systems
+          cross-system proof chain for agentic systems
         </motion.div>
         <motion.div
           animate={{ opacity: [0.3, 0.7, 0.3] }}
@@ -121,13 +121,13 @@ export default function App() {
               <div>
                 <h3 style={{ marginBottom: 20 }}><SectionNum n="00" /> The Ordinary World</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, marginBottom: 24, maxWidth: 700 }}>
-                  Every agentic system logs what happened. None of them can prove it.
+                  Autonomous agents are running in production. Every platform logs what they do. None of them can prove it across system boundaries.
                 </p>
                 <div style={{ maxWidth: 700 }}>
-                  <StoryStep num="1" text="OpenShell sandboxes agents and logs OCSF security events — network allows, denials, process launches. The logs go to JSONL files. They can be edited. They can be deleted." />
-                  <StoryStep num="2" text="Kagenti orchestrates agent fleets and captures OTEL traces — tool calls, LLM requests, agent lifecycle. The traces go to Phoenix or Jaeger. They can be overwritten." />
-                  <StoryStep num="3" text="Governance systems evaluate authority — passports, scoped permissions, policy decisions. The decisions are checked but not chained. There's no proof they weren't altered after the fact." />
-                  <StoryStep num="4" text="When compliance asks 'show me verifiable proof of what this agent did across all three systems' — nobody has an answer. Observability is not proof. Logs are not evidence. That's the ordinary world." />
+                  <StoryStep num="1" text="OpenShell sandboxes agents and emits OCSF security events — network allows, denials, process launches. The events go to JSONL files that can be edited or deleted after the fact." />
+                  <StoryStep num="2" text="Kagenti orchestrates agent fleets and captures OTEL traces — tool calls, LLM requests, agent lifecycle. The traces go to Phoenix or Jaeger — separate systems with no cryptographic link to what the sandbox enforced." />
+                  <StoryStep num="3" text="Governance systems evaluate authority — passports, scoped permissions, policy decisions. But those decisions live in a different database than the sandbox events or the agent traces. Nothing ties them together." />
+                  <StoryStep num="4" text="Existing immutable databases (QLDB, immudb) are single-system stores. They can prove entries weren't tampered with — but they can't correlate across independent systems with different identities and formats. When compliance asks 'prove what this agent did end-to-end,' nobody has a unified, verifiable answer." />
                 </div>
               </div>
             )}
@@ -137,10 +137,23 @@ export default function App() {
               <div>
                 <h3 style={{ marginBottom: 8 }}><SectionNum n="01" /> The Call to Adventure</h3>
                 <SectionContext lines={[
-                  'What if every system wrote its events — in its own format, with its own identity — to a single chain that nobody owns?',
-                  'The ledger doesn\'t interpret content. It chains raw bytes, stores metadata, and makes everything independently verifiable. One gRPC call. Your data. Chained and proven.',
+                  'What if every system wrote its events — in its own format, with its own identity — to a shared proof chain with independent per-source verification?',
+                  'Not a replacement for QLDB or immudb. A cross-system layer that sits above them. Each source keeps its own hash chain. A single query correlates across all sources by trace ID, agent ID, or time range.',
                 ]} />
                 <SystemDiagram />
+                <div className="card" style={{ marginTop: 16, borderColor: 'var(--border)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', fontFamily: 'var(--font-display)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+                    The contract
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+                    <span style={{ color: 'var(--purple)' }}>WriteEntry</span>{'('}<br/>
+                    {'  '}<span style={{ color: 'var(--text-dim)' }}>entry_type:</span> <span style={{ color: 'var(--green)' }}>"openshell.network_activity"</span> <span style={{ color: 'var(--text-disabled)' }}>// your namespace</span><br/>
+                    {'  '}<span style={{ color: 'var(--text-dim)' }}>agent_id:</span> <span style={{ color: 'var(--green)' }}>"sbx-abc123"</span> <span style={{ color: 'var(--text-disabled)' }}>// your identity</span><br/>
+                    {'  '}<span style={{ color: 'var(--text-dim)' }}>content:</span> <span style={{ color: 'var(--green)' }}>{'<'}raw OCSF bytes{'>'}</span> <span style={{ color: 'var(--text-disabled)' }}>// your format</span><br/>
+                    {'  '}<span style={{ color: 'var(--text-dim)' }}>correlation_id:</span> <span style={{ color: 'var(--green)' }}>"trace-aaa"</span> <span style={{ color: 'var(--text-disabled)' }}>// the cross-system join key</span><br/>
+                    {')'}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -149,8 +162,8 @@ export default function App() {
               <div>
                 <h3 style={{ marginBottom: 8 }}><SectionNum n="02" /> Crossing the Threshold</h3>
                 <SectionContext lines={[
-                  'Each source system writes entries that form independent SHA-256 hash chains. Each chain is self-contained — verifiable without trusting any other system.',
-                  'Click any chain to see the linked blocks: entry hash, previous hash, chain position. Every link is cryptographically bound to the one before it.',
+                  'Each source system forms its own independent SHA-256 hash chain. OpenShell events don\'t share a chain with Kagenti spans. Each chain is verifiable without trusting any other system.',
+                  'This is what makes it different from a shared log: compromise one source and only that source\'s chain is affected. The other chains remain independently valid.',
                 ]} />
                 <StatsBar summary={summary} />
                 <ChainView />
@@ -162,8 +175,8 @@ export default function App() {
               <div>
                 <h3 style={{ marginBottom: 8 }}><SectionNum n="03" /> Tests & Allies</h3>
                 <SectionContext lines={[
-                  'Three systems, three identities, three event formats — united by correlation IDs. When OpenShell denies a request and Kagenti records the tool call, the same trace ID links them.',
-                  'No shared identity registry. No format standardization. Just a join key that each system already has.',
+                  'Three systems, three identities, three event formats — correlated by trace ID. When Kagenti records a tool call and OpenShell records the network decision for the same request, the correlation ID links them without either system knowing about the other.',
+                  'No shared identity registry. No event format negotiation. The only agreement is a join key — a W3C trace ID, an X-Request-ID, or any string both systems propagate through their request headers.',
                 ]} />
                 <TimelineView />
               </div>
@@ -174,8 +187,8 @@ export default function App() {
               <div>
                 <h3 style={{ marginBottom: 8 }}><SectionNum n="04" /> The Ordeal</h3>
                 <SectionContext lines={[
-                  'The chains have been tested against every attack we could throw at them. SQL injection, write floods, forged entries, deleted rows, hash tampering, cross-chain contamination.',
-                  'Click Verify All to watch each chain pass cryptographic verification in real time.',
+                  '92 automated tests: SQL injection, write floods, forged entries, deleted rows, hash tampering, cross-chain contamination, replay attacks, content size abuse, and restart survival. All GREEN.',
+                  'The database enforces append-only at the permission level — the application role cannot UPDATE or DELETE entries. The service verifies this at startup and refuses to run if the constraint is missing.',
                 ]} />
                 <VerifyView />
               </div>
@@ -186,8 +199,8 @@ export default function App() {
               <div>
                 <h3 style={{ marginBottom: 8 }}><SectionNum n="05" /> The Reward</h3>
                 <SectionContext lines={[
-                  'The reward is what no single system could provide alone: a unified, verifiable proof chain across independent agentic systems.',
-                  'Drift detection finds authorization gaps — requests that were denied by the sandbox but never evaluated by the governance layer. Gaps that would be invisible without cross-system correlation.',
+                  'Drift detection queries across sources to find authorization gaps — requests that were denied by the sandbox but never evaluated by the governance layer. Gaps that would be invisible to any single system.',
+                  'This is the cross-system proof that no existing tool provides: correlation + verification + gap detection across independent agentic platforms.',
                 ]} />
                 <DriftView />
               </div>
@@ -201,35 +214,49 @@ export default function App() {
                 <p style={{ color: 'var(--text-secondary)', fontSize: 16, lineHeight: 1.7, marginBottom: 24 }}>
                   Everything you just saw was live. Real entries from real systems —
                   OpenShell sandbox events, Kagenti OTEL traces, governance authority decisions —
-                  all chained, all verified, all independently provable.
+                  chained, verified, and independently provable.
                 </p>
 
                 <div className="card" style={{ marginBottom: 24, borderColor: 'var(--blue-border)' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--blue)', fontFamily: 'var(--font-display)', marginBottom: 16 }}>
-                    What the ledger proves
+                    What the ledger proves — and what it doesn't
                   </div>
-                  <ClosingPoint text="Every event is hash-chained and tamper-evident. Modify one byte and the chain breaks." />
-                  <ClosingPoint text="Cross-system correlation by trace ID — no shared identity, no format coupling." />
-                  <ClosingPoint text="Authorization gaps are detectable across system boundaries — drift that no single system could find alone." />
-                  <ClosingPoint text="92 automated tests: functional, security, adversarial, synthetic, live integration. All GREEN." />
+                  <ClosingPoint text="Proves: entries were not modified after submission. SHA-256 hash chaining with per-entry verification." />
+                  <ClosingPoint text="Proves: cross-system events are correlatable by trace ID without shared identity." />
+                  <ClosingPoint text="Proves: authorization gaps are detectable across system boundaries." />
+                  <ClosingPoint text="Does not prove: events are accurate when submitted. Attestation is the writer's responsibility. If OpenShell lies about a decision, the ledger faithfully chains the lie. Integrity ≠ accuracy." />
                 </div>
 
                 <div className="card" style={{ marginBottom: 24, borderColor: 'var(--green-border)' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--green)', fontFamily: 'var(--font-display)', marginBottom: 16 }}>
-                    The universal contract
+                    Why not QLDB, immudb, or a managed ledger?
                   </div>
-                  <ClosingPoint text="One gRPC call. Your identity. Your event format. Chained and verifiable." />
-                  <ClosingPoint text="No shared identity registry required. No event format standardization." />
-                  <ClosingPoint text="Any agentic system plugs in. OpenShell, Kagenti, governance services, or the 30-line Python script you write in 5 minutes." />
+                  <ClosingPoint text="Those are single-system immutable stores. They prove their own entries weren't tampered with. They don't correlate across independent systems with different identities and event formats." />
+                  <ClosingPoint text="This ledger provides independent per-source chains (compromise one, others unaffected), cross-system correlation queries, and agent-aware adapters for OCSF and OTEL." />
+                  <ClosingPoint text="It's not a replacement for QLDB. It's the cross-system layer above any single-system store." />
                 </div>
 
                 <div className="card" style={{ marginBottom: 24, borderColor: 'var(--purple-border)' }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--purple)', fontFamily: 'var(--font-display)', marginBottom: 16 }}>
-                    What's missing from the ecosystem
+                    The ecosystem gap
                   </div>
-                  <ClosingPoint text="MCP gives agents protocols. OpenShell gives agents sandboxes. Kagenti gives agents orchestration. AGT gives agents per-framework governance." />
-                  <ClosingPoint text="None of them gives the ecosystem a shared, neutral, cryptographically verifiable proof chain." />
-                  <ClosingPoint text="This is that layer." />
+                  <ClosingPoint text="MCP standardizes agent-to-tool communication. OpenShell sandboxes agent execution. Kagenti orchestrates agent fleets. AGT provides per-framework governance gates." />
+                  <ClosingPoint text="None of them provides a neutral, cross-system, cryptographically verifiable proof chain." />
+                  <ClosingPoint text="This is a proposal for the AAIF Observability & Traceability Working Group. The contract is defined. The reference implementation is Apache-2.0. The adapters work with real systems. We're seeking feedback on the verification model and the integration pattern." />
+                </div>
+
+                <div className="card" style={{ marginBottom: 24, borderColor: 'var(--border)' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-secondary)', fontFamily: 'var(--font-display)', marginBottom: 16 }}>
+                    Evidence depth
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
+                    <EvidenceStat value="92" label="automated tests" />
+                    <EvidenceStat value="15" label="test categories" />
+                    <EvidenceStat value="10" label="security tests (SQL injection, null bytes, unicode)" />
+                    <EvidenceStat value="8" label="adversarial tests (floods, forged entries, replay)" />
+                    <EvidenceStat value="2" label="live systems tested (OpenShell + Kagenti)" />
+                    <EvidenceStat value="0" label="tests failing" />
+                  </div>
                 </div>
 
                 <div style={{ textAlign: 'center', marginTop: 40, marginBottom: 20 }}>
@@ -333,6 +360,18 @@ function ClosingPoint({ text }: { text: string }) {
     <div style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'flex-start' }}>
       <span style={{ color: 'var(--text-disabled)', fontSize: 16, lineHeight: 1.4, flexShrink: 0 }}>—</span>
       <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, margin: 0 }}>{text}</p>
+    </div>
+  )
+}
+
+function EvidenceStat({ value, label }: { value: string; label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+      <span style={{ fontSize: 22, fontWeight: 900, fontFamily: 'var(--font-display)',
+        background: 'linear-gradient(135deg, var(--blue), var(--purple))',
+        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+      }}>{value}</span>
+      <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{label}</span>
     </div>
   )
 }
