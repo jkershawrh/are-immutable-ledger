@@ -43,6 +43,49 @@ No shared identity system required. No event format standardization required. Ea
 - **Idempotent** - optional idempotency keys prevent duplicate entries on retry; reusing a key with different content or metadata returns a conflict.
 - **Cross-system queries** - `QueryEntries` filters by agent_id, correlation_id, source_id, entry_type prefix, and time range. One query returns entries from all sources for the same agent or request.
 - **Hardened admin surface** - `/shutdownz` is disabled unless `ARE_LEDGER_SHUTDOWN_TOKEN` is set and requires a bearer token when enabled. gRPC bearer-token auth can be enabled with `ARE_LEDGER_API_TOKEN`.
+- **Proof receipts** - `IssueReceipt` writes an entry and returns a compact `ProofReceipt` (hash, type, position, timestamp). `VerifyProof` validates a receipt by hash without knowing the entry ID. Receipts travel as HTTP headers so downstream services verify a check ran without re-executing it.
+
+## Proof Receipts
+
+Receipts solve the redundant-check problem in multi-hop agentic architectures. When AuthBridge runs a guardrail, it issues a receipt. The MCP Gateway verifies the receipt and skips the same guardrail. The MCP Server does the same.
+
+```
+AuthBridge runs guardrail
+  → IssueReceipt(entry_type="guardrail.pii_scan", content={result: "clean"})
+  → Gets ProofReceipt {entry_hash: "abc123...", chain_position: 42}
+  → Attaches header: X-Proof-Receipt: base64({h:"abc123...", t:"guardrail.pii_scan"})
+  → Forwards request
+
+MCP Gateway receives request
+  → Reads X-Proof-Receipt
+  → VerifyProof(entry_hash="abc123...", entry_type="guardrail.pii_scan")
+  → Response: {valid: true, agent_id: "authbridge", written_ts: ...}
+  → Skips re-running the guardrail
+```
+
+Receipts are NOT credentials — they prove a check ran, they don't grant authority. The V2 hash commits to all entry fields (content, agent_id, correlation_id, entry_id, chain_position, timestamp, previous_hash). Changing any field breaks verification.
+
+## Performance
+
+Benchmarked on Podman-hosted PostgreSQL (single node, no tuning):
+
+| Operation | p50 | p95 | p99 | Throughput |
+|---|---|---|---|---|
+| WriteEntry | 1.7ms | 2.9ms | 4.3ms | ~520/sec |
+| IssueReceipt | 2.9ms | 7.2ms | 13.9ms | ~280/sec |
+| VerifyProof | 0.6ms | 1.3ms | 1.7ms | ~1,400/sec |
+| VerifyProof (under write load) | 0.9ms | — | 1.9ms | — |
+| GetChainTip (200-entry chain) | 0.4ms | — | 0.6ms | — |
+
+### Known Scale Considerations
+
+| Concern | Current behavior | Mitigation path |
+|---|---|---|
+| **Advisory lock contention** | Writes to the same `entry_type` serialize via PostgreSQL advisory locks. 5 concurrent writers to ONE chain: ~200 writes/sec with errors. | Use distinct `entry_type` per source. Parallel chains scale linearly — 5 chains = 5x throughput. |
+| **Single PostgreSQL instance** | All reads and writes go through one database connection. | Read replicas for VerifyProof. Connection pooling (PgBouncer). Horizontal partitioning by entry_type prefix. |
+| **Chain verification on long chains** | VerifyChain reads all entries for an entry_type. 200-entry chain: fine. 1M entries: full table scan. | Add chain verification checkpoints. Verify only the last N entries from a known-good checkpoint. |
+| **Storage growth** | Each entry stores full content bytes (up to 1 MiB). High-volume systems generate significant storage. | Content compression. Content-addressed storage (store hash, external blob). TTL-based archival. |
+| **gRPC message size** | QueryEntries can return large result sets. Default 4MB gRPC limit hit at ~3K entries. | Pagination (already implemented). Client must page through results. |
 
 ## Quick Start
 

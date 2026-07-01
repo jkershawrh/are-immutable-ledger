@@ -18,6 +18,8 @@
 | **L13: Kagenti Live** | **5** | **OTEL collector health, agent traces captured, traceIds preserved, chains verified** |
 | **L14: Synthetic** | **4** | **Multi-system lifecycle, concurrent agents, long chains, timeline reconstruction** |
 | **L15: Cross-System** | **5** | **Both sources coexist, trace ID joins both, timeline interleaves, chains independent, drift detectable** |
+| **L16: Proof Receipts** | **7** | **IssueReceipt, VerifyProof, round-trip encoding, chain of trust, cross-service verification** |
+| **L17: Receipt Security** | **12** | **Forged hash, cross-type verify, replay staleness, content/agent/correlation swap, idempotency conflict, SQL injection, flood** |
 
 ## Attack Surface Coverage
 
@@ -98,6 +100,30 @@
 **Attack:** Write entries to chain A, verify chain B is unaffected.
 **Result:** Chains are fully independent — different hashes, different positions, no cross-contamination.
 
+## Proof Receipt Red Team (L17)
+
+Receipts introduce new attack surface — a portable proof token that downstream services trust. Every vector tested:
+
+| Attack | What the attacker tries | Result | Test |
+|---|---|---|---|
+| **Forge a receipt** | Fabricate a hash that passes VerifyProof | NOT_FOUND — hash doesn't exist in ledger | L17.01 |
+| **Cross-type theft** | Use a valid hash against a different entry_type | NOT_FOUND — hash is scoped to type | L17.02 |
+| **Replay** | Reuse an old receipt on a new request | Verifies, but written_ts exposes staleness — downstream sets freshness threshold | L17.03 |
+| **Content swap** | Change what the receipt claims was validated | Hash verification FAILS — content is committed in hash | L17.04 |
+| **Issuer impersonation** | Change agent_id to claim a more trusted issuer | Hash verification FAILS — agent_id is committed in hash | L17.05 |
+| **Request rebinding** | Change correlation_id to bind receipt to different request | Hash verification FAILS — correlation_id is committed in hash | L17.06 |
+| **Idempotency abuse** | Reuse key with different content | ALREADY_EXISTS error — conflict detected | L17.08 |
+| **SQL injection** | Inject SQL via entry_type in IssueReceipt | Stored literally, no execution | L17.11 |
+| **Receipt flood** | Issue 100 receipts from 5 concurrent threads | All succeed, service healthy | L17.12 |
+
+### What receipts DON'T protect against
+
+| Limitation | Why | Mitigation |
+|---|---|---|
+| **Lying writer** | If AuthBridge writes "guardrail: clean" when it wasn't, the receipt faithfully proves the lie | Attestation is the writer's responsibility. Receipt proves the claim was made, not that it's true. |
+| **Replay within freshness window** | A receipt issued 100ms ago is indistinguishable from a new one | Downstream services must bind receipt to the specific request (via correlation_id match) |
+| **Receipt interception** | If an attacker reads the X-Proof-Receipt header, they know the hash | Hash is not a secret — knowing it only lets you verify, not forge. The entry_type scoping prevents cross-context use. |
+
 ## Documented Gaps (Honest Assessment)
 
 These are known limitations, not bugs. They represent design decisions appropriate for the current stage:
@@ -110,6 +136,10 @@ These are known limitations, not bugs. They represent design decisions appropria
 | **No rate limiting** | Service-level rate limiting not implemented | Deploy behind API gateway with rate limits |
 | **Static genesis hash** | SHA-256("ARE_LEDGER_GENESIS") is hardcoded | Configurable via `ARE_LEDGER_GENESIS_HASH_INPUT` env var |
 | **Default credentials in demo** | Demo compose uses `ledger/ledger` | Production deploys with proper secrets management |
+| **Advisory lock contention** | Concurrent writes to same chain serialize (~200/sec under contention) | Use distinct entry_types per source; parallel chains scale linearly |
+| **Single DB instance** | All reads/writes through one connection | Read replicas for VerifyProof, connection pooling, partitioning |
+| **No receipt expiry** | Receipts verify indefinitely as long as the entry exists | Downstream services enforce freshness via written_ts check |
+| **Receipts not signed** | Receipts are hash references, not cryptographically signed tokens | The hash IS the proof — it references a chain-linked entry. Signing would add key management complexity without meaningfully stronger guarantees since the ledger is the verifier. |
 
 ## Live Integration Evidence
 
