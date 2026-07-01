@@ -9,9 +9,10 @@ use tokio_postgres::{Client, Row};
 use uuid::Uuid;
 
 use super::{
-    ChainTip, EntryWriteInput, LedgerEntryRecord, LedgerRepository, OutboxRecord, OutboxStatus,
-    RepositoryError, WriteResult,
+    ledger_written_payload, ChainTip, EntryQuery, EntryWriteInput, LedgerEntryRecord,
+    LedgerRepository, OutboxRecord, OutboxStatus, QueryResult, RepositoryError, WriteResult,
 };
+use crate::crypto::{canonical_entry_hash, CanonicalEntryHashInput};
 
 /// Append-only ledger + outbox backed by PostgreSQL (`migrations/*.sql`).
 pub struct PostgresLedgerRepository {
@@ -65,11 +66,6 @@ impl LedgerRepository for PostgresLedgerRepository {
         &self,
         input: EntryWriteInput,
     ) -> Result<WriteResult, RepositoryError> {
-        let payload_json: Json<Value> = Json(
-            serde_json::from_str::<Value>(&input.outbox_payload)
-                .map_err(|_| RepositoryError::Unavailable)?,
-        );
-
         let mut client = self.client.lock().await;
         let tx = client
             .transaction()
@@ -117,6 +113,32 @@ impl LedgerRepository for PostgresLedgerRepository {
         let entry_id = Uuid::new_v4();
         let outbox_id = Uuid::new_v4();
         let written_ts = input.written_ts;
+        let entry_hash = canonical_entry_hash(&CanonicalEntryHashInput {
+            entry_id,
+            entry_type: &input.entry_type,
+            agent_id: &input.agent_id,
+            content: &input.content,
+            content_type: &input.content_type,
+            source_id: &input.source_id,
+            correlation_id: input.correlation_id.as_deref(),
+            idempotency_key: input.idempotency_key.as_deref(),
+            chain_position: next_position,
+            written_ts_ms: written_ts.timestamp_millis(),
+            previous_hash: &input.previous_hash,
+        });
+        let outbox_payload = ledger_written_payload(
+            &entry_id,
+            &input.entry_type,
+            &input.agent_id,
+            &input.source_id,
+            &entry_hash,
+            input.correlation_id.as_deref(),
+            written_ts.timestamp_millis(),
+        );
+        let payload_json: Json<Value> = Json(
+            serde_json::from_str::<Value>(&outbox_payload)
+                .map_err(|_| RepositoryError::Unavailable)?,
+        );
 
         if let Err(e) = tx
             .execute(
@@ -133,7 +155,7 @@ impl LedgerRepository for PostgresLedgerRepository {
                     &input.source_id,
                     &input.correlation_id,
                     &input.idempotency_key,
-                    &input.entry_hash,
+                    &entry_hash,
                     &input.previous_hash,
                     &next_position,
                     &written_ts,
@@ -144,6 +166,9 @@ impl LedgerRepository for PostgresLedgerRepository {
             let _ = tx.rollback().await;
             if let Some(db) = e.as_db_error() {
                 if db.code() == &SqlState::UNIQUE_VIOLATION {
+                    if db.constraint() == Some("idx_ledger_idempotency") {
+                        return Err(RepositoryError::IdempotencyConflict);
+                    }
                     return Err(RepositoryError::ChainIntegrityViolation);
                 }
             }
@@ -177,7 +202,7 @@ impl LedgerRepository for PostgresLedgerRepository {
             source_id: input.source_id,
             correlation_id: input.correlation_id,
             idempotency_key: input.idempotency_key.clone(),
-            entry_hash: input.entry_hash.clone(),
+            entry_hash: entry_hash.clone(),
             previous_hash: input.previous_hash,
             chain_position: next_position,
             written_ts,
@@ -186,7 +211,7 @@ impl LedgerRepository for PostgresLedgerRepository {
             outbox_id,
             entry_id,
             entry_type: input.entry_type,
-            payload: input.outbox_payload,
+            payload: outbox_payload,
             status: OutboxStatus::Pending,
             attempt_count: 0,
         };
@@ -208,19 +233,66 @@ impl LedgerRepository for PostgresLedgerRepository {
             .ok_or(RepositoryError::NotFound)
     }
 
-    async fn query_entries(&self) -> Result<Vec<LedgerEntryRecord>, RepositoryError> {
+    async fn query_entries(&self, query: EntryQuery) -> Result<QueryResult, RepositoryError> {
         let client = self.client.lock().await;
+        let from_seconds = query.from_ts_ms.map(|ts| ts as f64 / 1000.0);
+        let to_seconds = query.to_ts_ms.map(|ts| ts as f64 / 1000.0);
+        let limit = query.limit as i64;
+        let offset = query.offset as i64;
+        let params = [
+            &query.entry_type_prefix as &(dyn tokio_postgres::types::ToSql + Sync),
+            &query.agent_id,
+            &query.source_id,
+            &query.correlation_id,
+            &from_seconds,
+            &to_seconds,
+        ];
+        let count_row = client
+            .query_one(
+                "SELECT COUNT(*)::BIGINT AS total_count
+                 FROM are_ledger.ledger_entries
+                 WHERE ($1::TEXT IS NULL OR entry_type LIKE ($1::TEXT || '%'))
+                   AND ($2::TEXT IS NULL OR agent_id = $2)
+                   AND ($3::TEXT IS NULL OR source_id = $3)
+                   AND ($4::TEXT IS NULL OR correlation_id = $4)
+                   AND ($5::DOUBLE PRECISION IS NULL OR written_ts >= to_timestamp($5::DOUBLE PRECISION))
+                   AND ($6::DOUBLE PRECISION IS NULL OR written_ts <= to_timestamp($6::DOUBLE PRECISION))",
+                &params,
+            )
+            .await
+            .map_err(|_| RepositoryError::Unavailable)?;
+        let total_count: i64 = count_row.get("total_count");
+
         let rows = client
             .query(
                 "SELECT entry_id, entry_type, agent_id, content, content_type, source_id,
                         correlation_id, idempotency_key, entry_hash, previous_hash, chain_position, written_ts
                  FROM are_ledger.ledger_entries
-                 ORDER BY written_ts, chain_position",
-                &[],
+                 WHERE ($1::TEXT IS NULL OR entry_type LIKE ($1::TEXT || '%'))
+                   AND ($2::TEXT IS NULL OR agent_id = $2)
+                   AND ($3::TEXT IS NULL OR source_id = $3)
+                   AND ($4::TEXT IS NULL OR correlation_id = $4)
+                   AND ($5::DOUBLE PRECISION IS NULL OR written_ts >= to_timestamp($5::DOUBLE PRECISION))
+                   AND ($6::DOUBLE PRECISION IS NULL OR written_ts <= to_timestamp($6::DOUBLE PRECISION))
+                 ORDER BY written_ts, chain_position
+                 LIMIT $7 OFFSET $8",
+                &[
+                    &query.entry_type_prefix,
+                    &query.agent_id,
+                    &query.source_id,
+                    &query.correlation_id,
+                    &from_seconds,
+                    &to_seconds,
+                    &limit,
+                    &offset,
+                ],
             )
             .await
             .map_err(|_| RepositoryError::Unavailable)?;
-        Ok(rows.iter().map(Self::map_row_entry).collect())
+        Ok(QueryResult {
+            entries: rows.iter().map(Self::map_row_entry).collect(),
+            total_count,
+        })
     }
 
     async fn get_chain_tip(&self, entry_type: &str) -> Result<ChainTip, RepositoryError> {

@@ -12,9 +12,16 @@ import immutable_ledger_pb2_grpc as pb_grpc
 
 
 class LedgerClient:
-    def __init__(self, endpoint="localhost:19292"):
+    def __init__(self, endpoint="localhost:19292", api_token=None):
         self.channel = grpc.insecure_channel(endpoint)
         self.stub = pb_grpc.ImmutableLedgerServiceStub(self.channel)
+        token = api_token or os.environ.get("ARE_LEDGER_API_TOKEN", "")
+        self.metadata = (("authorization", f"Bearer {token}"),) if token else None
+
+    def _call(self, method, request):
+        if self.metadata:
+            return method(request, metadata=self.metadata)
+        return method(request)
 
     def write(self, entry_type, agent_id, content, *, content_type="application/json",
               source_id="", correlation_id="", idempotency_key=""):
@@ -31,10 +38,10 @@ class LedgerClient:
             correlation_id=correlation_id,
             idempotency_key=idempotency_key,
         )
-        return self.stub.WriteEntry(req)
+        return self._call(self.stub.WriteEntry, req)
 
     def get_entry(self, entry_id):
-        return self.stub.GetEntry(pb.GetEntryRequest(entry_id=entry_id)).entry
+        return self._call(self.stub.GetEntry, pb.GetEntryRequest(entry_id=entry_id)).entry
 
     def query(self, *, agent_id="", entry_type="", source_id="",
               correlation_id="", from_ts=0, to_ts=0, page_size=100):
@@ -47,22 +54,22 @@ class LedgerClient:
             to_ts=to_ts,
             page_size=page_size,
         )
-        resp = self.stub.QueryEntries(req)
+        resp = self._call(self.stub.QueryEntries, req)
         entries = list(resp.entries)
         while resp.next_page_token:
             req.page_token = resp.next_page_token
-            resp = self.stub.QueryEntries(req)
+            resp = self._call(self.stub.QueryEntries, req)
             entries.extend(resp.entries)
         return entries
 
     def verify_entry(self, entry_id):
-        return self.stub.VerifyEntry(pb.VerifyEntryRequest(entry_id=entry_id))
+        return self._call(self.stub.VerifyEntry, pb.VerifyEntryRequest(entry_id=entry_id))
 
     def verify_chain(self, entry_type):
-        return self.stub.VerifyChain(pb.VerifyChainRequest(entry_type=entry_type))
+        return self._call(self.stub.VerifyChain, pb.VerifyChainRequest(entry_type=entry_type))
 
     def get_chain_tip(self, entry_type):
-        return self.stub.GetChainTip(pb.GetChainTipRequest(entry_type=entry_type))
+        return self._call(self.stub.GetChainTip, pb.GetChainTipRequest(entry_type=entry_type))
 
     def close(self):
         self.channel.close()

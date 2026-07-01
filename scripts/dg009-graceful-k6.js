@@ -8,6 +8,7 @@ client.load(['/work/proto'], 'immutable_ledger.proto');
 
 const target = __ENV.K6_TARGET || 'host.docker.internal:9092';
 const healthBase = __ENV.HEALTH_BASE || 'http://host.docker.internal:8080';
+const shutdownToken = __ENV.SHUTDOWN_TOKEN || '';
 
 export const options = {
   scenarios: {
@@ -47,9 +48,12 @@ export function writeEntry() {
 }
 
 export function triggerShutdown() {
-  const response = http.post(`${healthBase}/shutdownz`);
+  const params = shutdownToken
+    ? { headers: { Authorization: `Bearer ${shutdownToken}` } }
+    : {};
+  const response = http.post(`${healthBase}/shutdownz`, null, params);
   check(response, {
-    'shutdown accepted': (r) => r && (r.status === 202 || r.status === 0),
+    'shutdown accepted or disabled': (r) => r && [202, 401, 404, 0].includes(r.status),
   });
 }
 
