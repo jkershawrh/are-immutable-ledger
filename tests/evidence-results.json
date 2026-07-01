@@ -1,8 +1,8 @@
 {
-  "timestamp": 1782869376556,
+  "timestamp": 1782874482200,
   "endpoint": "localhost:19292",
-  "total": 82,
-  "green": 82,
+  "total": 92,
+  "green": 92,
   "red": 0,
   "results": [
     {
@@ -494,6 +494,66 @@
     {
       "id": "L9.05",
       "desc": "Live cross-system correlation with real trace IDs",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L13.01",
+      "desc": "Kagenti OTEL collector is running and healthy",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L13.02",
+      "desc": "Agent deployment produced OTEL traces in collector",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L13.03",
+      "desc": "Live OTEL spans written to ledger via adapter",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L13.04",
+      "desc": "Real traceIds preserved as correlation_id",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L13.05",
+      "desc": "Kagenti chains verify independently",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L15.01",
+      "desc": "OpenShell + Kagenti events coexist in ledger",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L15.02",
+      "desc": "Same trace ID returns entries from both sources",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L15.03",
+      "desc": "Timeline shows chronological interleaving from both sources",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L15.04",
+      "desc": "Independent chain verification across both live sources",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L15.05",
+      "desc": "Drift detection works across live sources",
       "status": "GREEN",
       "detail": ""
     }
