@@ -36,11 +36,13 @@ No shared identity system required. No event format standardization required. Ea
 
 ## How It Works
 
-- **Append-only** — database constraints enforce no UPDATE/DELETE on ledger entries. Startup verification confirms permissions.
-- **Per-type hash chains** — each `entry_type` forms its own SHA-256 chain. Independent verification per source system.
-- **Concurrent-safe** — PostgreSQL advisory locks serialize writes per chain. Integrity violations trigger circuit breaker after 5 retries.
-- **Idempotent** — optional idempotency keys prevent duplicate entries on retry.
-- **Cross-system queries** — `QueryEntries` filters by agent_id, correlation_id, source_id, entry_type, and time range. One query returns entries from all sources for the same agent or request.
+- **Append-only** - database constraints enforce no UPDATE/DELETE on ledger entries. Startup verification confirms permissions.
+- **Per-type hash chains** - each `entry_type` forms its own SHA-256 chain. Independent verification per source system.
+- **V2 canonical proof envelope** - hashes commit to entry ID, metadata, content, idempotency key, chain position, timestamp, and previous hash using length-delimited fields.
+- **Concurrent-safe** - PostgreSQL advisory locks serialize writes per chain. Integrity violations trigger circuit breaker after 5 retries.
+- **Idempotent** - optional idempotency keys prevent duplicate entries on retry; reusing a key with different content or metadata returns a conflict.
+- **Cross-system queries** - `QueryEntries` filters by agent_id, correlation_id, source_id, entry_type prefix, and time range. One query returns entries from all sources for the same agent or request.
+- **Hardened admin surface** - `/shutdownz` is disabled unless `ARE_LEDGER_SHUTDOWN_TOKEN` is set and requires a bearer token when enabled. gRPC bearer-token auth can be enabled with `ARE_LEDGER_API_TOKEN`.
 
 ## Quick Start
 
@@ -50,6 +52,10 @@ make up        # Start ledger + postgres
 make smoke     # Write sample entries and verify chains
 make demo      # Full cross-system demo with OpenShell + Kagenti
 ```
+
+## Security Notes
+
+For shared deployments, put the gRPC listener behind TLS/mTLS-capable infrastructure and set `ARE_LEDGER_API_TOKEN`; clients can pass the token explicitly or through the same environment variable. Set `ARE_LEDGER_SHUTDOWN_TOKEN` only for controlled graceful-shutdown drills, and call `/shutdownz` with `Authorization: Bearer <token>`.
 
 ## Demo: Cross-System Proof
 

@@ -5,13 +5,13 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use axum::{
-    http::{header, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     routing::{get, post},
     Router,
 };
 use tokio::net::TcpListener;
 use tokio::sync::watch;
-use tonic::transport::Server;
+use tonic::{transport::Server, Status};
 use tracing::{info, warn};
 
 use are_immutable_ledger::config::AppConfig;
@@ -59,6 +59,8 @@ async fn main() -> anyhow::Result<()> {
     let health_addr = SocketAddr::from(([0, 0, 0, 0], config.health_port));
     let metrics_addr = SocketAddr::from(([0, 0, 0, 0], config.metrics_port));
     let (shutdown_tx, _) = watch::channel(false);
+    let api_token = config.api_token.clone();
+    let shutdown_token = config.shutdown_token.clone();
 
     {
         let shutdown_tx = shutdown_tx.clone();
@@ -70,12 +72,24 @@ async fn main() -> anyhow::Result<()> {
 
     let mut grpc_shutdown_rx = shutdown_tx.subscribe();
     let grpc_server = tokio::spawn(async move {
-        Server::builder()
-            .add_service(ImmutableLedgerServiceServer::new(grpc))
-            .serve_with_shutdown(grpc_addr, async move {
-                let _ = grpc_shutdown_rx.changed().await;
-            })
-            .await
+        if let Some(api_token) = api_token {
+            Server::builder()
+                .add_service(ImmutableLedgerServiceServer::with_interceptor(
+                    grpc,
+                    move |request: tonic::Request<()>| authorize_grpc_request(request, &api_token),
+                ))
+                .serve_with_shutdown(grpc_addr, async move {
+                    let _ = grpc_shutdown_rx.changed().await;
+                })
+                .await
+        } else {
+            Server::builder()
+                .add_service(ImmutableLedgerServiceServer::new(grpc))
+                .serve_with_shutdown(grpc_addr, async move {
+                    let _ = grpc_shutdown_rx.changed().await;
+                })
+                .await
+        }
     });
 
     let shutdown_tx_for_route = shutdown_tx.clone();
@@ -84,9 +98,16 @@ async fn main() -> anyhow::Result<()> {
         .route("/readyz", get(|| async { "ready" }))
         .route(
             "/shutdownz",
-            post(move || {
+            post(move |headers: HeaderMap| {
                 let shutdown_tx = shutdown_tx_for_route.clone();
+                let shutdown_token = shutdown_token.clone();
                 async move {
+                    let Some(token) = shutdown_token else {
+                        return StatusCode::NOT_FOUND;
+                    };
+                    if !authorized_http(&headers, &token) {
+                        return StatusCode::UNAUTHORIZED;
+                    }
                     let _ = shutdown_tx.send(true);
                     StatusCode::ACCEPTED
                 }
@@ -135,6 +156,31 @@ async fn main() -> anyhow::Result<()> {
     health_result.context("health server failed")?;
     metrics_result.context("metrics server failed")?;
     Ok(())
+}
+
+fn authorize_grpc_request(
+    request: tonic::Request<()>,
+    api_token: &str,
+) -> Result<tonic::Request<()>, Status> {
+    let expected = format!("Bearer {api_token}");
+    let authorized = request
+        .metadata()
+        .get("authorization")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|actual| actual == expected);
+    if authorized {
+        Ok(request)
+    } else {
+        Err(Status::unauthenticated("missing or invalid bearer token"))
+    }
+}
+
+fn authorized_http(headers: &HeaderMap, token: &str) -> bool {
+    let expected = format!("Bearer {token}");
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|actual| actual == expected)
 }
 
 async fn connect_postgres(

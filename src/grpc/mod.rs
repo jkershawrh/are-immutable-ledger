@@ -73,6 +73,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
                 previous_hash: entry.previous_hash,
                 chain_position: entry.chain_position,
                 written_ts: entry.written_ts.timestamp_millis(),
+                idempotency_key: entry.idempotency_key.unwrap_or_default(),
             }),
         }))
     }
@@ -119,6 +120,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
                     previous_hash: entry.previous_hash,
                     chain_position: entry.chain_position,
                     written_ts: entry.written_ts.timestamp_millis(),
+                    idempotency_key: entry.idempotency_key.unwrap_or_default(),
                 })
                 .collect(),
             next_page_token: next_token.unwrap_or_default(),
@@ -206,6 +208,7 @@ fn map_err(err: ServiceError) -> Status {
     match err {
         ServiceError::NotFound => Status::not_found("not found"),
         ServiceError::InvalidArgument(message) => Status::invalid_argument(message),
+        ServiceError::AlreadyExists(message) => Status::already_exists(message),
         ServiceError::Unavailable => Status::unavailable("unavailable"),
         ServiceError::Internal(message) => Status::internal(message),
     }
@@ -238,6 +241,8 @@ mod tests {
             kafka_sasl_username: "user".to_string(),
             kafka_sasl_password: "pass".to_string(),
             genesis_hash_input: "ARE_LEDGER_GENESIS".to_string(),
+            api_token: None,
+            shutdown_token: None,
         })
     }
 
@@ -262,6 +267,10 @@ mod tests {
         assert_eq!(
             map_err(ServiceError::InvalidArgument("x".to_string())).code(),
             tonic::Code::InvalidArgument
+        );
+        assert_eq!(
+            map_err(ServiceError::AlreadyExists("x".to_string())).code(),
+            tonic::Code::AlreadyExists
         );
         assert_eq!(
             map_err(ServiceError::Unavailable).code(),

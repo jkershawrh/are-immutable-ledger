@@ -74,16 +74,18 @@ def test_l1_02(c):
 def test_l1_03(c):
     import grpc
     idem_key = f"l1-03-{uuid.uuid4()}"
-    c.write("test.l1.conflict", "test-agent-l1", '{"body": "first"}',
+    etype = f"test.l1.conflict.{uuid.uuid4().hex[:8]}"
+    c.write(etype, "test-agent-l1", '{"body": "first"}',
             source_id="evidence-runner", idempotency_key=idem_key)
     try:
-        c.write("test.l1.conflict", "test-agent-l1", '{"body": "different"}',
+        c.write(etype, "test-agent-l1", '{"body": "different"}',
                 source_id="evidence-runner", idempotency_key=idem_key)
         # Some implementations silently return the original — that's also acceptable
         # as long as the second body is NOT stored
-        entry = c.query(entry_type="test.l1.conflict")
+        entry = c.query(entry_type=etype)
         bodies = [json.loads(e.content.decode())["body"] for e in entry if e.correlation_id == ""]
         # The key insight: "different" should NOT appear as stored content
+        assert "different" not in bodies, "Conflicting idempotency retry stored a second body"
     except grpc.RpcError:
         pass  # Error is the expected behavior — conflict detected
 
@@ -114,12 +116,28 @@ def test_l1_05(c):
 def test_l1_06(c):
     etype = f"test.l1.deterministic.{uuid.uuid4().hex[:8]}"
     content = '{"deterministic": true}'
-    r1 = c.write(etype, "test-agent-l1", content, source_id="evidence-runner")
+    idem_key = f"idem-l1-06-{uuid.uuid4().hex[:8]}"
+    r1 = c.write(etype, "test-agent-l1", content, source_id="evidence-runner",
+                 correlation_id="corr-l1-06", idempotency_key=idem_key)
     e1 = c.get_entry(r1.entry_id)
-    computed = hashlib.sha256(
-        (etype + "test-agent-l1" + content + "application/json" + "evidence-runner"
-         + str(e1.written_ts) + e1.previous_hash).encode()
-    ).hexdigest()
+    fields = [
+        ("entry_id", e1.entry_id.encode()),
+        ("entry_type", e1.entry_type.encode()),
+        ("agent_id", e1.agent_id.encode()),
+        ("content", bytes(e1.content)),
+        ("content_type", e1.content_type.encode()),
+        ("source_id", e1.source_id.encode()),
+        ("correlation_id", e1.correlation_id.encode()),
+        ("idempotency_key", e1.idempotency_key.encode()),
+        ("chain_position", str(e1.chain_position).encode()),
+        ("written_ts_ms", str(e1.written_ts).encode()),
+        ("previous_hash", e1.previous_hash.encode()),
+    ]
+    canonical = b"ARE_LEDGER_ENTRY_HASH_V2\n" + b"".join(
+        name.encode() + b":" + str(len(value)).encode() + b":" + value + b"\n"
+        for name, value in fields
+    )
+    computed = hashlib.sha256(canonical).hexdigest()
     assert e1.entry_hash == computed, f"Hash mismatch: {e1.entry_hash} != {computed}"
 
 @test("L1.07", "Chain linkage: previous_hash is included in entry_hash")
@@ -266,6 +284,7 @@ def test_l3_04(c):
     c.write(f"{prefix}.beta", "agent-x", '{"sub": "beta"}', source_id="evidence-runner")
     c.write("test.l3.other", "agent-x", '{"sub": "other"}', source_id="evidence-runner")
     results = c.query(entry_type=prefix)
+    assert len(results) == 2, f"Expected 2 prefix matches, got {len(results)}"
     for e in results:
         assert e.entry_type.startswith(prefix), f"Got non-matching type: {e.entry_type}"
 
