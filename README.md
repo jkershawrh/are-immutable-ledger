@@ -2,17 +2,18 @@
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-A universal, cryptographically verifiable audit ledger for autonomous AI agents. Any agentic system writes events with its own identity and format. The ledger chains them, stores them, and makes them independently verifiable.
+Proof chain and runtime trust infrastructure for agentic systems. Hash-chained entries prove what happened. Portable proof receipts prove a check ran so downstream services skip redundant guardrails. Cross-system verification correlates events across independent platforms without shared identity.
 
-> **The agentic ecosystem has protocols (MCP), runtimes (OpenShell, Goose), orchestration (Kagenti), and per-framework governance (AGT). What it doesn't have is a shared, neutral, cross-system proof chain. This is that layer.**
+> **Guardrails get duplicated across enforcement points — AuthBridge runs PII scan, MCP Gateway runs it again, AI Gateway runs it a third time. The ledger solves this: centralized proof, decentralized enforcement, portable receipts between enforcement points.**
 
 ## What It Does
 
-The ledger answers three questions for any agentic system:
+The ledger answers four questions for any agentic system:
 
 1. **What happened?** Append-only event storage with per-source hash chains.
 2. **Can you prove it?** SHA-256 hash chaining with cryptographic chain verification.
-3. **Can you correlate across systems?** Query by agent ID, correlation ID, source, time range, or entry type across independent writers.
+3. **Did this check already run?** Proof receipts travel with requests — downstream verifies the receipt instead of re-running the guardrail.
+4. **Can you correlate across systems?** Query by agent ID, correlation ID, source, time range, or entry type across independent writers.
 
 ## The Universal Contract
 
