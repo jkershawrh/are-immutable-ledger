@@ -6,18 +6,20 @@ import { ChainView } from './components/ChainView'
 import { TimelineView } from './components/TimelineView'
 import { VerifyView } from './components/VerifyView'
 import { DriftView } from './components/DriftView'
+import { ReceiptFlow } from './components/ReceiptFlow'
 import { StatsBar } from './components/StatsBar'
 import { useFetch } from './hooks/useLedger'
 import { api } from './api/ledgerApi'
 
-const ACTS = ['story', 'architecture', 'chains', 'timeline', 'ordeal', 'reward', 'return'] as const
+const ACTS = ['story', 'architecture', 'chains', 'timeline', 'receipts', 'ordeal', 'reward', 'return'] as const
 type Act = typeof ACTS[number]
 
 const NEXT_LABELS: Record<Act, string> = {
   story: 'See the architecture',
   architecture: 'Explore the chains',
   chains: 'View the timeline',
-  timeline: 'Face the ordeal',
+  timeline: 'See proof receipts',
+  receipts: 'Face the ordeal',
   ordeal: 'Claim the reward',
   reward: 'Return with proof',
   return: '',
@@ -198,10 +200,22 @@ export default function App() {
               </div>
             )}
 
-            {/* ACT 4 — THE ORDEAL: ADVERSARIAL */}
+            {/* ACT 4 — THE TRANSFORMATION: PROOF RECEIPTS */}
+            {currentAct === 'receipts' && (
+              <div>
+                <h3 style={{ marginBottom: 8 }}><SectionNum n="04" /> The Transformation</h3>
+                <SectionContext lines={[
+                  'The ledger doesn\'t just record what happened — it issues portable proof receipts. When AuthBridge runs a guardrail, the receipt travels with the request. Downstream services verify the proof instead of re-running the check.',
+                  'Click through the flow to see how a single request accumulates verified proofs as it moves through the pipeline.',
+                ]} />
+                <ReceiptFlow />
+              </div>
+            )}
+
+            {/* ACT 5 — THE ORDEAL: ADVERSARIAL */}
             {currentAct === 'ordeal' && (
               <div>
-                <h3 style={{ marginBottom: 8 }}><SectionNum n="04" /> The Ordeal</h3>
+                <h3 style={{ marginBottom: 8 }}><SectionNum n="05" /> The Ordeal</h3>
                 <SectionContext lines={[
                   '116 automated tests across 18 categories. SQL injection, write floods, forged entries, deleted rows, hash tampering, cross-chain contamination, replay attacks, and restart survival. Plus receipt-specific attacks: forged hashes, cross-type theft, content swaps, agent impersonation, correlation rebinding, and idempotency conflicts. All GREEN.',
                   'The database enforces append-only at the permission level — the application role cannot UPDATE or DELETE entries. The service verifies this at startup and refuses to run if the constraint is missing.',
@@ -213,7 +227,7 @@ export default function App() {
             {/* ACT 5 — THE REWARD: CROSS-SYSTEM PROOF */}
             {currentAct === 'reward' && (
               <div>
-                <h3 style={{ marginBottom: 8 }}><SectionNum n="05" /> The Reward</h3>
+                <h3 style={{ marginBottom: 8 }}><SectionNum n="06" /> The Reward</h3>
                 <SectionContext lines={[
                   'Drift detection queries across sources to find authorization gaps — requests that were denied by the sandbox but never evaluated by the governance layer. Gaps that would be invisible to any single system.',
                   'This is the cross-system proof that no existing tool provides: correlation + verification + gap detection across independent agentic platforms.',
@@ -225,7 +239,7 @@ export default function App() {
             {/* ACT 6 — THE RETURN */}
             {currentAct === 'return' && (
               <div style={{ maxWidth: 700, margin: '0 auto' }}>
-                <h3 style={{ marginBottom: 20 }}><SectionNum n="06" /> The Return</h3>
+                <h3 style={{ marginBottom: 20 }}><SectionNum n="07" /> The Return</h3>
 
                 <p style={{ color: 'var(--text-secondary)', fontSize: 16, lineHeight: 1.7, marginBottom: 24 }}>
                   Everything you just saw was live. Real entries from real systems —
