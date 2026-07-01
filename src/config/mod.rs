@@ -14,6 +14,8 @@ pub struct AppConfig {
     pub kafka_sasl_username: String,
     pub kafka_sasl_password: String,
     pub genesis_hash_input: String,
+    pub api_token: Option<String>,
+    pub shutdown_token: Option<String>,
 }
 
 #[derive(Debug, Error)]
@@ -39,6 +41,8 @@ impl AppConfig {
             kafka_sasl_password: required("ARE_LEDGER_KAFKA_SASL_PASSWORD")?,
             genesis_hash_input: env::var("ARE_LEDGER_GENESIS_HASH_INPUT")
                 .unwrap_or_else(|_| "ARE_LEDGER_GENESIS".to_string()),
+            api_token: env::var("ARE_LEDGER_API_TOKEN").ok(),
+            shutdown_token: env::var("ARE_LEDGER_SHUTDOWN_TOKEN").ok(),
         })
     }
 }
@@ -87,6 +91,8 @@ mod tests {
             "ARE_LEDGER_KAFKA_SASL_USERNAME",
             "ARE_LEDGER_KAFKA_SASL_PASSWORD",
             "ARE_LEDGER_GENESIS_HASH_INPUT",
+            "ARE_LEDGER_API_TOKEN",
+            "ARE_LEDGER_SHUTDOWN_TOKEN",
         ];
         for name in names {
             std::env::remove_var(name);
