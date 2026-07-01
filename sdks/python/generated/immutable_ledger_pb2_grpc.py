@@ -64,6 +64,16 @@ class ImmutableLedgerServiceStub(object):
                 request_serializer=immutable__ledger__pb2.GetChainTipRequest.SerializeToString,
                 response_deserializer=immutable__ledger__pb2.GetChainTipResponse.FromString,
                 _registered_method=True)
+        self.IssueReceipt = channel.unary_unary(
+                '/are.ledger.v1.ImmutableLedgerService/IssueReceipt',
+                request_serializer=immutable__ledger__pb2.WriteEntryRequest.SerializeToString,
+                response_deserializer=immutable__ledger__pb2.ProofReceipt.FromString,
+                _registered_method=True)
+        self.VerifyProof = channel.unary_unary(
+                '/are.ledger.v1.ImmutableLedgerService/VerifyProof',
+                request_serializer=immutable__ledger__pb2.VerifyProofRequest.SerializeToString,
+                response_deserializer=immutable__ledger__pb2.VerifyProofResponse.FromString,
+                _registered_method=True)
 
 
 class ImmutableLedgerServiceServicer(object):
@@ -105,6 +115,18 @@ class ImmutableLedgerServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def IssueReceipt(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def VerifyProof(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ImmutableLedgerServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -137,6 +159,16 @@ def add_ImmutableLedgerServiceServicer_to_server(servicer, server):
                     servicer.GetChainTip,
                     request_deserializer=immutable__ledger__pb2.GetChainTipRequest.FromString,
                     response_serializer=immutable__ledger__pb2.GetChainTipResponse.SerializeToString,
+            ),
+            'IssueReceipt': grpc.unary_unary_rpc_method_handler(
+                    servicer.IssueReceipt,
+                    request_deserializer=immutable__ledger__pb2.WriteEntryRequest.FromString,
+                    response_serializer=immutable__ledger__pb2.ProofReceipt.SerializeToString,
+            ),
+            'VerifyProof': grpc.unary_unary_rpc_method_handler(
+                    servicer.VerifyProof,
+                    request_deserializer=immutable__ledger__pb2.VerifyProofRequest.FromString,
+                    response_serializer=immutable__ledger__pb2.VerifyProofResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -301,6 +333,60 @@ class ImmutableLedgerService(object):
             '/are.ledger.v1.ImmutableLedgerService/GetChainTip',
             immutable__ledger__pb2.GetChainTipRequest.SerializeToString,
             immutable__ledger__pb2.GetChainTipResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def IssueReceipt(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/are.ledger.v1.ImmutableLedgerService/IssueReceipt',
+            immutable__ledger__pb2.WriteEntryRequest.SerializeToString,
+            immutable__ledger__pb2.ProofReceipt.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def VerifyProof(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/are.ledger.v1.ImmutableLedgerService/VerifyProof',
+            immutable__ledger__pb2.VerifyProofRequest.SerializeToString,
+            immutable__ledger__pb2.VerifyProofResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -8,6 +8,8 @@ service ImmutableLedgerService {
   rpc VerifyEntry(VerifyEntryRequest) returns (VerifyEntryResponse);
   rpc VerifyChain(VerifyChainRequest) returns (VerifyChainResponse);
   rpc GetChainTip(GetChainTipRequest) returns (GetChainTipResponse);
+  rpc IssueReceipt(WriteEntryRequest) returns (ProofReceipt);
+  rpc VerifyProof(VerifyProofRequest) returns (VerifyProofResponse);
 }
 
 message WriteEntryRequest {
@@ -73,6 +75,28 @@ message GetChainTipResponse {
   string entry_hash = 2;
   int64 chain_position = 3;
   int64 written_ts = 4;
+}
+
+message ProofReceipt {
+  string entry_hash = 1;
+  string entry_type = 2;
+  int64 chain_position = 3;
+  int64 written_ts = 4;
+  string entry_id = 5;
+}
+
+message VerifyProofRequest {
+  string entry_hash = 1;
+  string entry_type = 2;
+}
+
+message VerifyProofResponse {
+  bool valid = 1;
+  string entry_type = 2;
+  string agent_id = 3;
+  int64 written_ts = 4;
+  int64 chain_position = 5;
+  string failure_reason = 6;
 }
 
 message LedgerEntry {

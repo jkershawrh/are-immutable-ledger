@@ -73,6 +73,23 @@ class LedgerClient:
     def get_chain_tip(self, entry_type):
         return self._call(self.stub.GetChainTip, pb.GetChainTipRequest(entry_type=entry_type))
 
+    def issue_receipt(self, entry_type, agent_id, content, *, content_type="application/json",
+                      source_id="", correlation_id="", idempotency_key=""):
+        if isinstance(content, str):
+            content = content.encode("utf-8")
+        if not idempotency_key:
+            idempotency_key = str(uuid.uuid4())
+        req = pb.WriteEntryRequest(
+            entry_type=entry_type, agent_id=agent_id, content=content,
+            content_type=content_type, source_id=source_id,
+            correlation_id=correlation_id, idempotency_key=idempotency_key,
+        )
+        return self._call(self.stub.IssueReceipt, req)
+
+    def verify_proof(self, entry_hash, entry_type):
+        return self._call(self.stub.VerifyProof,
+                         pb.VerifyProofRequest(entry_hash=entry_hash, entry_type=entry_type))
+
     def close(self):
         self.channel.close()
 
