@@ -2,7 +2,7 @@
 
 Status: `RED` = failing/untested | `GREEN` = passing | `YELLOW` = partial
 
-Last run: tests/evidence-results.json (60/60 GREEN; remaining matrix rows are not automated by the runner)
+Last run: tests/evidence-results.json (92/92 GREEN automated; 10 YELLOW are L7 Proof Explorer CLI + L2.04 + L4.04 — documented but not yet in runner)
 
 ---
 
@@ -126,6 +126,63 @@ Last run: tests/evidence-results.json (60/60 GREEN; remaining matrix rows are no
 | L10.04 | Content exceeding max size rejected | Clear error, no partial write | GREEN | tests/evidence-results.json |
 | L10.05 | Ledger restart preserves all chains | Chains verify after restart | GREEN | tests/evidence-results.json |
 
+## L11: Security Fundamentals
+
+| ID | Test | Expected | Status | Evidence |
+|---|---|---|---|---|
+| L11.01 | Chain tip tampering: next write recovers or fails safely | Service uses entries table for tip | GREEN | tests/evidence-results.json |
+| L11.02 | Outbox modification doesn't affect chain integrity | Chain valid despite outbox corruption | GREEN | tests/evidence-results.json |
+| L11.03 | SQL injection via entry_type field blocked | Stored literally, no execution | GREEN | tests/evidence-results.json |
+| L11.04 | SQL injection via agent_id field blocked | Stored literally, no execution | GREEN | tests/evidence-results.json |
+| L11.05 | Null bytes in content handled safely | Stored and retrieved without truncation | GREEN | tests/evidence-results.json |
+| L11.06 | Unicode in all string fields handled correctly | Emoji, CJK, RTL stored and queryable | GREEN | tests/evidence-results.json |
+| L11.07 | Empty required fields rejected | INVALID_ARGUMENT returned | GREEN | tests/evidence-results.json |
+| L11.08 | Health endpoint doesn't leak sensitive data | No credentials or hashes | GREEN | tests/evidence-results.json |
+| L11.09 | Direct DB INSERT requires correct hash | Wrong hash caught by VerifyEntry | GREEN | tests/evidence-results.json |
+| L11.10 | Metrics endpoint doesn't leak entry content | No entry data in metrics | GREEN | tests/evidence-results.json |
+
+## L12: Adversarial / Red Team
+
+| ID | Test | Expected | Status | Evidence |
+|---|---|---|---|---|
+| L12.01 | Write flood (1000 writes across 10 chains) | 900+ succeed, all chains valid | GREEN | tests/evidence-results.json |
+| L12.02 | Query flood (50 sequential queries) | All return results, service healthy | GREEN | tests/evidence-results.json |
+| L12.03 | Large payload flood (50 x 500KB) | 40+ succeed, DB handles burst | GREEN | tests/evidence-results.json |
+| L12.05 | Forged entry detected by VerifyChain | Chain reports invalid at forged entry | GREEN | tests/evidence-results.json |
+| L12.06 | Entry deletion detected by VerifyChain | Chain reports invalid (gap) | GREEN | tests/evidence-results.json |
+| L12.07 | Duplicate chain_position rejected | DB unique constraint rejects | GREEN | tests/evidence-results.json |
+| L12.08 | Cross-chain contamination impossible | Independent hashes, no leakage | GREEN | tests/evidence-results.json |
+| L12.10 | Default credentials documented | All found in compose, flagged | GREEN | tests/evidence-results.json |
+
+## L13: Kagenti Live Integration
+
+| ID | Test | Expected | Status | Evidence |
+|---|---|---|---|---|
+| L13.01 | Kagenti OTEL collector running and healthy | Collector pod ready | GREEN | tests/evidence-results.json |
+| L13.02 | Agent deployment produced OTEL traces | Spans visible in collector logs | GREEN | tests/evidence-results.json |
+| L13.03 | Live OTEL spans written to ledger | kagenti.* entries present | GREEN | tests/evidence-results.json |
+| L13.04 | Real traceIds preserved as correlation_id | Query by traceId returns entries | GREEN | tests/evidence-results.json |
+| L13.05 | Kagenti chains verify independently | All kagenti.* chains VALID | GREEN | tests/evidence-results.json |
+
+## L14: Synthetic Testing
+
+| ID | Test | Expected | Status | Evidence |
+|---|---|---|---|---|
+| L14.01 | Model promotion lifecycle (3 systems) | 8 events from 3 sources, all chains valid | GREEN | tests/evidence-results.json |
+| L14.02 | 5-agent concurrent session (50 entries) | All entries written, no cross-contamination | GREEN | tests/evidence-results.json |
+| L14.03 | Long chain stress (200 entries) | Chain valid, tip correct | GREEN | tests/evidence-results.json |
+| L14.05 | Cross-system timeline (50 events, 5 sources) | Chronological ordering, all sources present | GREEN | tests/evidence-results.json |
+
+## L15: Cross-System Live Communication
+
+| ID | Test | Expected | Status | Evidence |
+|---|---|---|---|---|
+| L15.01 | OpenShell + Kagenti events coexist in ledger | Both openshell.* and kagenti.* live entries | GREEN | tests/evidence-results.json |
+| L15.02 | Same trace ID returns entries from both sources | Cross-system join by trace ID | GREEN | tests/evidence-results.json |
+| L15.03 | Timeline shows chronological interleaving | Events from both sources sorted | GREEN | tests/evidence-results.json |
+| L15.04 | Independent chain verification across live sources | All live chains VALID | GREEN | tests/evidence-results.json |
+| L15.05 | Drift detection works across live sources | Denials flagged for drift check | GREEN | tests/evidence-results.json |
+
 ---
 
 ## Summary
@@ -142,4 +199,9 @@ Last run: tests/evidence-results.json (60/60 GREEN; remaining matrix rows are no
 | L8: Demo Narrative | 6 | 6 | 0 | 0 |
 | L9: Live Integration | 5 | 5 | 0 | 0 |
 | L10: Resilience | 5 | 5 | 0 | 0 |
-| **TOTAL** | **70** | **60** | **10** | **0** |
+| L11: Security | 10 | 10 | 0 | 0 |
+| L12: Adversarial | 8 | 8 | 0 | 0 |
+| L13: Kagenti Live | 5 | 5 | 0 | 0 |
+| L14: Synthetic | 4 | 4 | 0 | 0 |
+| L15: Cross-System | 5 | 5 | 0 | 0 |
+| **TOTAL** | **102** | **92** | **10** | **0** |
