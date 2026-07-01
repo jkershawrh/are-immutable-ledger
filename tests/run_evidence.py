@@ -575,7 +575,7 @@ def test_l8_04(c):
     c.write("test.l8.drift.scope", "agt-drift",
             json.dumps({"action_class": "api.write", "resource": "api.example.com",
                          "effect": "DENY"}),
-            source_id="are-foundation", correlation_id=corr_allowed)
+            source_id="governance-service", correlation_id=corr_allowed)
     c.write("test.l8.drift.deny2", "sbx-drift",
             json.dumps({"class_uid": 4001, "action": "Denied", "disposition": "Blocked",
                          "dst_endpoint": {"domain": "api.example.com"}}),

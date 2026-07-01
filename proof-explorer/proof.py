@@ -305,7 +305,7 @@ def cmd_drift(args, client):
         print(f"       Agent:       {gap['agent_id']}")
         print(f"       Correlation: {gap['correlation_id']}")
         print(f"       Source:      {gap['source']}")
-        print(f"       Issue:       Denied by sandbox but no ARE scope evaluation found")
+        print(f"       Issue:       Denied by sandbox but no governance scope evaluation found")
         print()
 
     print(f"  {len(gaps)} gap(s) detected. {len(denials)} denials checked, "

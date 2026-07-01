@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 const systems = [
   { id: 'openshell', label: 'OpenShell', sub: 'OCSF Events', color: 'var(--green)', x: 100, y: 60 },
   { id: 'kagenti', label: 'Kagenti', sub: 'OTEL Spans', color: 'var(--cyan)', x: 100, y: 180 },
-  { id: 'are', label: 'ARE Foundation', sub: 'Authority Decisions', color: 'var(--purple)', x: 100, y: 300 },
+  { id: 'governance', label: 'Governance', sub: 'Authority Decisions', color: 'var(--purple)', x: 100, y: 300 },
 ]
 
 const ledger = { x: 550, y: 180, w: 200, h: 80 }

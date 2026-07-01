@@ -174,7 +174,7 @@ This ledger is the missing persistence and verification layer underneath protoco
 
 ## Origin
 
-Extracted from the [ARE Foundation](https://github.com/srex-dev/are-foundation) project's S0 immutable ledger service. Open-sourced as standalone neutral infrastructure for the agentic ecosystem.
+Open-sourced as standalone neutral infrastructure for the agentic ecosystem.
 
 ## License
 
