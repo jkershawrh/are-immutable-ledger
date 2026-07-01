@@ -65,7 +65,12 @@ export function ChainView() {
   if (loading) return <div style={{ padding: 32, color: 'var(--text-dim)' }}>Loading chains...</div>
   if (!chains) return null
 
-  const displayChains = chains.filter(c => !c.entry_type.startsWith('test.'))
+  const displayChains = chains.filter(c =>
+    !c.entry_type.startsWith('test.') &&
+    !c.entry_type.startsWith('test\'') &&
+    !c.entry_type.startsWith('are.') &&
+    c.source !== 'unknown' || c.entry_type.startsWith('gov.')
+  )
 
   return (
     <div>

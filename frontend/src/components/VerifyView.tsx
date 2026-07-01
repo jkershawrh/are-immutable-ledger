@@ -13,7 +13,11 @@ export function VerifyView() {
     setResults(null)
     setProgress(0)
     const data = await api.verify()
-    const chains = data.chains.filter(c => !c.entry_type.startsWith('test.'))
+    const chains = data.chains.filter(c =>
+      !c.entry_type.startsWith('test.') &&
+      !c.entry_type.startsWith('test\'') &&
+      !c.entry_type.startsWith('are.')
+    )
     const staged: VerifyResult[] = []
     for (let i = 0; i < chains.length; i++) {
       staged.push(chains[i])
