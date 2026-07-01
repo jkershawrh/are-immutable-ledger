@@ -53,6 +53,32 @@ make smoke     # Write sample entries and verify chains
 make demo      # Full cross-system demo with OpenShell + Kagenti
 ```
 
+## Evidence & Metrics
+
+The repository keeps the proof surface close to the code:
+
+- `tests/EVIDENCE_MATRIX.md` summarizes automated, live, and not-yet-automated coverage.
+- `tests/evidence-results.json` records the latest evidence runner output.
+- `tests/SECURITY_TESTING.md` documents red-team and hardening checks.
+- `proof-explorer/proof.py verify --all` independently verifies stored chains through the public API.
+
+Useful local verification commands:
+
+```bash
+cargo test --all --locked
+cargo clippy --all-targets --all-features --locked -- -D warnings
+python tests/run_evidence.py
+python proof-explorer/proof.py verify --all
+```
+
+The service exposes Prometheus metrics at `/metrics` on `ARE_LEDGER_METRICS_PORT`:
+
+- `are_ledger_write_total`
+- `are_ledger_chain_verify_failure_total`
+- `are_outbox_publish_failure_total`
+
+Hash compatibility note: this pre-release standalone ledger uses the V2 canonical proof envelope as its initial public contract. No production data has been written with the earlier experimental hash shape; if you have local demo data from before V2, reload it.
+
 ## Security Notes
 
 For shared deployments, put the gRPC listener behind TLS/mTLS-capable infrastructure and set `ARE_LEDGER_API_TOKEN`; clients can pass the token explicitly or through the same environment variable. Set `ARE_LEDGER_SHUTDOWN_TOKEN` only for controlled graceful-shutdown drills, and call `/shutdownz` with `Authorization: Bearer <token>`.
@@ -110,6 +136,17 @@ System C ──→ direct  ──→ │  PostgreSQL (chains) │
 ```
 
 Each adapter is 100-150 lines of Python. Direct gRPC integration is ~30 lines. The ledger doesn't interpret event content — it chains raw bytes and makes them queryable by metadata.
+
+## Scaling Roadmap
+
+The current implementation is intentionally small and correctness-first. A practical scale-up path is:
+
+1. **Pool PostgreSQL connections.** Replace the single mutex-wrapped client with a connection pool while retaining per-`entry_type` advisory locks for chain serialization.
+2. **Measure the bottlenecks.** Add histograms/counters for write latency, advisory-lock wait time, idempotency conflicts, chain-integrity retries, query latency, verification latency, and outbox age.
+3. **Partition ledger storage.** Partition `ledger_entries` by time, tenant, or chain namespace once volume grows, and keep indexes aligned to `entry_type`, `agent_id`, `source_id`, `correlation_id`, and `written_ts` queries.
+4. **Add verification checkpoints.** Periodically persist signed/checkpointed chain tips or Merkle roots so long-chain verification can resume from known-good anchors instead of replaying from genesis every time.
+5. **Separate large payloads when needed.** Keep small event content inline; for large payloads, store a content hash in the ledger and move raw bytes to object storage.
+6. **Define synthetic scale gates.** Run local smoke, hot-chain stress, multi-chain stress, query/read stress, restart/recovery, and long-soak drills, then publish their outputs alongside the evidence matrix.
 
 ## Project Structure
 
