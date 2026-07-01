@@ -71,7 +71,7 @@ export default function App() {
           transition={{ delay: 0.8, duration: 0.8 }}
           style={{ fontSize: 13, color: 'var(--text-dim)', letterSpacing: 1, marginBottom: 48 }}
         >
-          cross-system proof chain for agentic systems
+          proof chain · runtime trust infrastructure
         </motion.div>
         <motion.div
           animate={{ opacity: [0.3, 0.7, 0.3] }}
@@ -242,9 +242,11 @@ export default function App() {
                 <h3 style={{ marginBottom: 20 }}><SectionNum n="07" /> The Return</h3>
 
                 <p style={{ color: 'var(--text-secondary)', fontSize: 16, lineHeight: 1.7, marginBottom: 24 }}>
-                  Everything you just saw was live. Real entries from real systems —
-                  OpenShell sandbox events, Kagenti OTEL traces, governance authority decisions —
-                  chained, verified, and independently provable.
+                  Everything you just saw was live. The ledger started as a proof chain —
+                  tamper-evident, cross-system, independently verifiable. Then proof receipts
+                  turned it into runtime trust infrastructure — portable proofs that eliminate
+                  redundant checks across multi-hop agent architectures. Same chain.
+                  Same verification. Now it's live infrastructure, not just audit.
                 </p>
 
                 <div className="card" style={{ marginBottom: 24, borderColor: 'var(--blue-border)' }}>
@@ -280,8 +282,8 @@ export default function App() {
                     The ecosystem gap
                   </div>
                   <ClosingPoint text="MCP standardizes agent-to-tool communication. OpenShell sandboxes agent execution. Kagenti orchestrates agent fleets. AGT provides per-framework governance gates." />
-                  <ClosingPoint text="None of them provides a neutral, cross-system, cryptographically verifiable proof chain with portable receipts." />
-                  <ClosingPoint text="We're seeking feedback on the verification model, the receipt primitive, and the integration pattern." />
+                  <ClosingPoint text="None of them solves centralized policy with decentralized enforcement — proving that guardrails ran at different enforcement points without re-running them." />
+                  <ClosingPoint text="The ledger is the coordination layer: centralized proof, decentralized verification, portable receipts between enforcement points." />
                 </div>
 
                 <div className="card" style={{ marginBottom: 24, borderColor: 'var(--border)' }}>
@@ -306,7 +308,7 @@ export default function App() {
                     fontSize: 24,
                   }}>⛓</div>
                   <p style={{ color: 'var(--text-dim)', fontSize: 13, fontFamily: 'var(--font-mono)' }}>
-                    Immutable Ledger — Apache-2.0 | Neutral infrastructure for agentic proof
+                    Immutable Ledger — Apache-2.0 | Proof chain · Runtime trust infrastructure
                   </p>
                 </div>
               </div>
