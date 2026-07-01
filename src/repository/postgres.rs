@@ -34,6 +34,7 @@ impl PostgresLedgerRepository {
             source_id: row.get("source_id"),
             correlation_id: row.get("correlation_id"),
             idempotency_key: row.get("idempotency_key"),
+            input_hash: row.try_get("input_hash").ok().flatten(),
             entry_hash: row.get("entry_hash"),
             previous_hash: row.get("previous_hash"),
             chain_position: row.get("chain_position"),
@@ -122,6 +123,7 @@ impl LedgerRepository for PostgresLedgerRepository {
             source_id: &input.source_id,
             correlation_id: input.correlation_id.as_deref(),
             idempotency_key: input.idempotency_key.as_deref(),
+            input_hash: input.input_hash.as_deref(),
             chain_position: next_position,
             written_ts_ms: written_ts.timestamp_millis(),
             previous_hash: &input.previous_hash,
@@ -144,8 +146,8 @@ impl LedgerRepository for PostgresLedgerRepository {
             .execute(
                 "INSERT INTO are_ledger.ledger_entries (
                     entry_id, entry_type, agent_id, content, content_type, source_id,
-                    correlation_id, idempotency_key, entry_hash, previous_hash, chain_position, written_ts
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                    correlation_id, idempotency_key, input_hash, entry_hash, previous_hash, chain_position, written_ts
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
                 &[
                     &entry_id,
                     &input.entry_type,
@@ -155,6 +157,7 @@ impl LedgerRepository for PostgresLedgerRepository {
                     &input.source_id,
                     &input.correlation_id,
                     &input.idempotency_key,
+                    &input.input_hash,
                     &entry_hash,
                     &input.previous_hash,
                     &next_position,
@@ -202,6 +205,7 @@ impl LedgerRepository for PostgresLedgerRepository {
             source_id: input.source_id,
             correlation_id: input.correlation_id,
             idempotency_key: input.idempotency_key.clone(),
+            input_hash: input.input_hash,
             entry_hash: entry_hash.clone(),
             previous_hash: input.previous_hash,
             chain_position: next_position,
@@ -223,7 +227,7 @@ impl LedgerRepository for PostgresLedgerRepository {
         let row = client
             .query_opt(
                 "SELECT entry_id, entry_type, agent_id, content, content_type, source_id,
-                        correlation_id, idempotency_key, entry_hash, previous_hash, chain_position, written_ts
+                        correlation_id, idempotency_key, input_hash, entry_hash, previous_hash, chain_position, written_ts
                  FROM are_ledger.ledger_entries WHERE entry_id = $1",
                 &[&entry_id],
             )
@@ -266,7 +270,7 @@ impl LedgerRepository for PostgresLedgerRepository {
         let rows = client
             .query(
                 "SELECT entry_id, entry_type, agent_id, content, content_type, source_id,
-                        correlation_id, idempotency_key, entry_hash, previous_hash, chain_position, written_ts
+                        correlation_id, idempotency_key, input_hash, entry_hash, previous_hash, chain_position, written_ts
                  FROM are_ledger.ledger_entries
                  WHERE ($1::TEXT IS NULL OR entry_type LIKE ($1::TEXT || '%'))
                    AND ($2::TEXT IS NULL OR agent_id = $2)
@@ -325,7 +329,7 @@ impl LedgerRepository for PostgresLedgerRepository {
         let rows = client
             .query(
                 "SELECT entry_id, entry_type, agent_id, content, content_type, source_id,
-                        correlation_id, idempotency_key, entry_hash, previous_hash, chain_position, written_ts
+                        correlation_id, idempotency_key, input_hash, entry_hash, previous_hash, chain_position, written_ts
                  FROM are_ledger.ledger_entries
                  WHERE entry_type = $1
                  ORDER BY chain_position",
@@ -345,7 +349,7 @@ impl LedgerRepository for PostgresLedgerRepository {
         let row = client
             .query_opt(
                 "SELECT entry_id, entry_type, agent_id, content, content_type, source_id,
-                        correlation_id, idempotency_key, entry_hash, previous_hash, chain_position, written_ts
+                        correlation_id, idempotency_key, input_hash, entry_hash, previous_hash, chain_position, written_ts
                  FROM are_ledger.ledger_entries
                  WHERE entry_type = $1 AND entry_hash = $2",
                 &[&entry_type, &entry_hash],
@@ -365,7 +369,7 @@ impl LedgerRepository for PostgresLedgerRepository {
         let row = client
             .query_opt(
                 "SELECT entry_id, entry_type, agent_id, content, content_type, source_id,
-                        correlation_id, idempotency_key, entry_hash, previous_hash, chain_position, written_ts
+                        correlation_id, idempotency_key, input_hash, entry_hash, previous_hash, chain_position, written_ts
                  FROM are_ledger.ledger_entries
                  WHERE entry_type = $1 AND idempotency_key = $2",
                 &[&entry_type, &idempotency_key],

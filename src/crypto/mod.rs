@@ -12,6 +12,7 @@ pub struct CanonicalEntryHashInput<'a> {
     pub source_id: &'a str,
     pub correlation_id: Option<&'a str>,
     pub idempotency_key: Option<&'a str>,
+    pub input_hash: Option<&'a str>,
     pub chain_position: i64,
     pub written_ts_ms: i64,
     pub previous_hash: &'a str,
@@ -47,6 +48,11 @@ pub fn canonical_entry_hash(input: &CanonicalEntryHashInput<'_>) -> String {
         &mut bytes,
         "idempotency_key",
         input.idempotency_key.unwrap_or_default().as_bytes(),
+    );
+    append_field(
+        &mut bytes,
+        "input_hash",
+        input.input_hash.unwrap_or_default().as_bytes(),
     );
     append_field(
         &mut bytes,

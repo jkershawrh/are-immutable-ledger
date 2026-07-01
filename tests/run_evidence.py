@@ -129,6 +129,7 @@ def test_l1_06(c):
         ("source_id", e1.source_id.encode()),
         ("correlation_id", e1.correlation_id.encode()),
         ("idempotency_key", e1.idempotency_key.encode()),
+        ("input_hash", (e1.input_hash if hasattr(e1, 'input_hash') and e1.input_hash else "").encode()),
         ("chain_position", str(e1.chain_position).encode()),
         ("written_ts_ms", str(e1.written_ts).encode()),
         ("previous_hash", e1.previous_hash.encode()),
@@ -1598,6 +1599,53 @@ def test_l18_04(c):
     assert content["guardrail"] == "prompt_injection"
     assert content["confidence"] == 0.98
 
+@test("L18.06", "IssueReceipt with input_hash: verifier sees matching hash")
+def test_l18_06(c):
+    etype = f"test.l18.inputhash.{uuid.uuid4().hex[:8]}"
+    payload = json.dumps({"query": "SELECT * FROM users"}).encode()
+    ih = hashlib.sha256(payload).hexdigest()
+    receipt = c.issue_receipt(etype, "authbridge", json.dumps({"result": "clean"}),
+        source_id="test", input_hash=ih)
+    assert receipt.input_hash == ih, f"Receipt should echo input_hash: got {receipt.input_hash}"
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid
+    assert v.input_hash == ih, f"VerifyProof should return input_hash: got {v.input_hash}"
+
+@test("L18.07", "Payload transformation detected via input_hash mismatch")
+def test_l18_07(c):
+    etype = f"test.l18.transform.{uuid.uuid4().hex[:8]}"
+    original = json.dumps({"query": "SELECT * FROM users"}).encode()
+    ih = hashlib.sha256(original).hexdigest()
+    receipt = c.issue_receipt(etype, "authbridge", json.dumps({"result": "clean"}),
+        source_id="test", input_hash=ih)
+    transformed = json.dumps({"query": "SELECT name FROM users"}).encode()
+    downstream_hash = hashlib.sha256(transformed).hexdigest()
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.input_hash != downstream_hash, "Transformed payload should NOT match receipt input_hash"
+    assert v.input_hash == ih, "Receipt input_hash should match original payload"
+
+@test("L18.08", "input_hash tampering breaks verification")
+def test_l18_08(c):
+    import subprocess
+    etype = f"test.l18.ihtamper.{uuid.uuid4().hex[:8]}"
+    ih = hashlib.sha256(b"original payload").hexdigest()
+    receipt = c.issue_receipt(etype, "agent", json.dumps({"test": True}),
+        source_id="test", input_hash=ih)
+    subprocess.run(
+        ["/opt/podman/bin/podman", "exec", "demo_postgres_1", "psql", "-U", "ledger", "-d", "ledger", "-c",
+         f"UPDATE are_ledger.ledger_entries SET input_hash='TAMPERED' WHERE entry_hash='{receipt.entry_hash}' AND entry_type='{etype}';"],
+        capture_output=True, text=True, timeout=30)
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert not v.valid, "Tampered input_hash should break verification"
+
+@test("L18.09", "input_hash is optional: receipts without it still work")
+def test_l18_09(c):
+    etype = f"test.l18.noih.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "agent", json.dumps({"test": True}), source_id="test")
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid, "Receipt without input_hash should still verify"
+    assert v.input_hash == "", "input_hash should be empty when not provided"
+
 @test("L18.05", "IssueReceipt returns correct entry_type (bug fix)")
 def test_l18_05(c):
     etype = f"test.l18.typebug.{uuid.uuid4().hex[:8]}"
@@ -1615,6 +1663,7 @@ LIVE_TESTS = [
     test_l17_06, test_l17_07, test_l17_08, test_l17_09, test_l17_10,
     test_l17_11, test_l17_12,
     test_l18_01, test_l18_02, test_l18_03, test_l18_04, test_l18_05,
+    test_l18_06, test_l18_07, test_l18_08, test_l18_09,
 ]
 
 

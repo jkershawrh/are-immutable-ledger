@@ -1,8 +1,8 @@
 {
-  "timestamp": 1782920138370,
+  "timestamp": 1782931542308,
   "endpoint": "localhost:19292",
-  "total": 5,
-  "green": 5,
+  "total": 9,
+  "green": 9,
   "red": 0,
   "results": [
     {
@@ -32,6 +32,30 @@
     {
       "id": "L18.05",
       "desc": "IssueReceipt returns correct entry_type (bug fix)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L18.06",
+      "desc": "IssueReceipt with input_hash: verifier sees matching hash",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L18.07",
+      "desc": "Payload transformation detected via input_hash mismatch",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L18.08",
+      "desc": "input_hash tampering breaks verification",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L18.09",
+      "desc": "input_hash is optional: receipts without it still work",
       "status": "GREEN",
       "detail": ""
     }

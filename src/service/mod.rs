@@ -22,6 +22,7 @@ pub struct WriteEntryInput {
     pub source_id: String,
     pub correlation_id: Option<String>,
     pub idempotency_key: Option<String>,
+    pub input_hash: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -55,6 +56,7 @@ pub struct ProofReceiptOutput {
     pub chain_position: i64,
     pub written_ts_ms: i64,
     pub entry_id: Uuid,
+    pub input_hash: String,
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +70,7 @@ pub struct VerifyProofOutput {
     pub source_id: String,
     pub correlation_id: String,
     pub content_type: String,
+    pub input_hash: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -232,6 +235,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
                     source_id: input.source_id.clone(),
                     correlation_id: input.correlation_id.clone(),
                     idempotency_key: input.idempotency_key.clone(),
+                    input_hash: input.input_hash.clone(),
                     previous_hash,
                     written_ts,
                 })
@@ -344,6 +348,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
             source_id: &entry.source_id,
             correlation_id: entry.correlation_id.as_deref(),
             idempotency_key: entry.idempotency_key.as_deref(),
+            input_hash: entry.input_hash.as_deref(),
             chain_position: entry.chain_position,
             written_ts_ms: entry.written_ts.timestamp_millis(),
             previous_hash: &entry.previous_hash,
@@ -455,6 +460,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
                 source_id: &entry.source_id,
                 correlation_id: entry.correlation_id.as_deref(),
                 idempotency_key: entry.idempotency_key.as_deref(),
+            input_hash: entry.input_hash.as_deref(),
                 chain_position: entry.chain_position,
                 written_ts_ms: entry.written_ts.timestamp_millis(),
                 previous_hash: &entry.previous_hash,
@@ -500,6 +506,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
         input: WriteEntryInput,
     ) -> Result<ProofReceiptOutput, ServiceError> {
         let entry_type = input.entry_type.clone();
+        let input_hash = input.input_hash.clone().unwrap_or_default();
         let write = self.write_entry(input).await?;
         Ok(ProofReceiptOutput {
             entry_hash: write.entry_hash,
@@ -507,6 +514,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
             chain_position: write.chain_position,
             written_ts_ms: write.written_ts_ms,
             entry_id: write.entry_id,
+            input_hash,
         })
     }
 
@@ -530,6 +538,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
             source_id: &entry.source_id,
             correlation_id: entry.correlation_id.as_deref(),
             idempotency_key: entry.idempotency_key.as_deref(),
+            input_hash: entry.input_hash.as_deref(),
             chain_position: entry.chain_position,
             written_ts_ms: entry.written_ts.timestamp_millis(),
             previous_hash: &entry.previous_hash,
@@ -550,6 +559,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
             source_id: entry.source_id,
             correlation_id: entry.correlation_id.unwrap_or_default(),
             content_type: entry.content_type,
+            input_hash: entry.input_hash.unwrap_or_default(),
         })
     }
 }

@@ -21,6 +21,7 @@ message WriteEntryRequest {
   string source_id = 5;
   string correlation_id = 6;
   string idempotency_key = 7;
+  string input_hash = 8;
 }
 
 message WriteEntryResponse {
@@ -84,6 +85,7 @@ message ProofReceipt {
   int64 chain_position = 3;
   int64 written_ts = 4;
   string entry_id = 5;
+  string input_hash = 6;
 }
 
 message VerifyProofRequest {
@@ -101,6 +103,7 @@ message VerifyProofResponse {
   string source_id = 7;
   string correlation_id = 8;
   string content_type = 9;
+  string input_hash = 10;
 }
 
 message GetEntryByHashRequest {
@@ -121,5 +124,6 @@ message LedgerEntry {
   int64 chain_position = 10;
   int64 written_ts = 11;
   string idempotency_key = 12;
+  string input_hash = 13;
 }
 
