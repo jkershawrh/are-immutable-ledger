@@ -155,7 +155,7 @@ export default function App() {
                       {'  '}<span style={{ color: 'var(--text-dim)' }}>content:</span> <span style={{ color: 'var(--green)' }}>{'{'}"result":"clean"{'}'}</span><br/>
                       {'  '}<span style={{ color: 'var(--text-dim)' }}>correlation_id:</span> <span style={{ color: 'var(--green)' }}>"trace-aaa"</span><br/>
                       {')'}<br/>
-                      <span style={{ color: 'var(--text-disabled)' }}>→ ProofReceipt {'{'} hash, type, position, ts {'}'}</span>
+                      <span style={{ color: 'var(--text-disabled)' }}>→ ProofReceipt {'{'} hash, type, sig, attestation {'}'}</span>
                     </div>
                   </div>
                   <div className="card" style={{ borderColor: 'var(--border)' }}>
@@ -167,7 +167,7 @@ export default function App() {
                       {'  '}<span style={{ color: 'var(--text-dim)' }}>hash:</span> <span style={{ color: 'var(--green)' }}>"abc123..."</span><br/>
                       {'  '}<span style={{ color: 'var(--text-dim)' }}>type:</span> <span style={{ color: 'var(--green)' }}>"guardrail.pii_scan"</span><br/>
                       {')'}<br/>
-                      <span style={{ color: 'var(--text-disabled)' }}>→ {'{'} valid, agent, source, corr_id, ts {'}'}</span><br/><br/>
+                      <span style={{ color: 'var(--text-disabled)' }}>→ {'{'} valid, agent, source, sig, attestation {'}'}</span><br/><br/>
                       <span style={{ color: 'var(--cyan)' }}>GetEntryByHash</span> <span style={{ color: 'var(--text-disabled)' }}>→ full content</span>
                     </div>
                   </div>
