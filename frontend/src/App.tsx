@@ -123,13 +123,14 @@ export default function App() {
               <div>
                 <h3 style={{ marginBottom: 20 }}><SectionNum n="00" /> The Ordinary World</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, marginBottom: 24, maxWidth: 700 }}>
-                  Autonomous agents are running in production. Every platform logs what they do. None of them can prove it across system boundaries.
+                  Autonomous agents are running in production across multiple enforcement points. Every platform logs what they do. None of them can prove it — not who made the decision, not what was checked, and not that the check happened in a trusted environment.
                 </p>
                 <div style={{ maxWidth: 700 }}>
-                  <StoryStep num="1" text="OpenShell sandboxes agents and emits OCSF security events — network allows, denials, process launches. The events go to JSONL files that can be edited or deleted after the fact." />
-                  <StoryStep num="2" text="Kagenti orchestrates agent fleets and captures OTEL traces — tool calls, LLM requests, agent lifecycle. The traces go to Phoenix or Jaeger — separate systems with no cryptographic link to what the sandbox enforced." />
-                  <StoryStep num="3" text="Governance systems evaluate authority — passports, scoped permissions, policy decisions. But those decisions live in a different database than the sandbox events or the agent traces. Nothing ties them together." />
-                  <StoryStep num="4" text="Existing immutable databases (QLDB, immudb) are single-system stores. They can prove entries weren't tampered with — but they can't correlate across independent systems with different identities and formats. When compliance asks 'prove what this agent did end-to-end,' nobody has a unified, verifiable answer." />
+                  <StoryStep num="1" text="Guardrails get duplicated. AuthBridge runs a PII scan, the MCP Gateway runs it again, the AI Gateway runs it a third time. Nobody knows if the same check already passed upstream. Each enforcement point re-executes because there's no proof the prior check happened." />
+                  <StoryStep num="2" text="Logs exist but prove nothing. OpenShell emits OCSF events to JSONL files — editable, deletable. Kagenti captures OTEL traces in Phoenix — overwritable. Policy engines evaluate decisions in their own databases. Three systems, three log formats, no cryptographic chain connecting them." />
+                  <StoryStep num="3" text="Identity is self-asserted. When a guardrail logs 'check passed,' there's no signature proving which service made that claim. An attacker who reaches the logging endpoint can claim any identity. Red teams have demonstrated this — immutability without signed attestation doesn't close the gap." />
+                  <StoryStep num="4" text="Payload transformation breaks trust. A guardrail checks the original request, but the next hop redacts a field or enriches the body. The downstream service has no way to know whether the upstream check covers the payload it's looking at — or a different version of it." />
+                  <StoryStep num="5" text="Existing immutable databases (QLDB, immudb) are single-system stores. They can prove their own entries weren't tampered with — but they can't correlate across independent systems, carry proof receipts between enforcement points, verify writer identity, or attest to runtime integrity. When compliance asks 'prove what this agent did end-to-end,' nobody has a unified answer." />
                 </div>
               </div>
             )}
