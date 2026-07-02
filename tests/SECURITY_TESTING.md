@@ -20,6 +20,10 @@
 | **L15: Cross-System** | **5** | **Both sources coexist, trace ID joins both, timeline interleaves, chains independent, drift detectable** |
 | **L16: Proof Receipts** | **7** | **IssueReceipt, VerifyProof, round-trip encoding, chain of trust, cross-service verification** |
 | **L17: Receipt Security** | **12** | **Forged hash, cross-type verify, replay staleness, content/agent/correlation swap, idempotency conflict, SQL injection, flood** |
+| **L18: Receipt Primitives** | **9** | **Enriched VerifyProof, GetEntryByHash, input_hash binding, payload transformation detection** |
+| **L19: CPEX Contract** | **11** | **All 9 CPEX scenarios: allow, deny, taint chain, redact, delegation, PII scan, Cedar PDP, APL gate** |
+| **L20: Signatures & Attestation** | **10** | **Ed25519 round-trip, forged sig detection, SPIFFE key ref, attestation report, all 3 layers, backward compat** |
+| **L21: Signature Red Team** | **5** | **Signature replay, flood, SQL injection via key ref, null bytes, mixed signed/unsigned chains** |
 
 ## Attack Surface Coverage
 

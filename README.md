@@ -46,6 +46,19 @@ No shared identity system required. No event format standardization required. Ea
 - **Cross-system queries** - `QueryEntries` filters by agent_id, correlation_id, source_id, entry_type prefix, and time range. One query returns entries from all sources for the same agent or request.
 - **Hardened admin surface** - `/shutdownz` is disabled unless `ARE_LEDGER_SHUTDOWN_TOKEN` is set and requires a bearer token when enabled. gRPC bearer-token auth can be enabled with `ARE_LEDGER_API_TOKEN`.
 - **Proof receipts** - `IssueReceipt` writes an entry and returns a compact `ProofReceipt` (hash, type, position, timestamp). `VerifyProof` validates a receipt by hash without knowing the entry ID. Receipts travel as HTTP headers so downstream services verify a check ran without re-executing it.
+- **Writer signatures** - optional `writer_signature` (opaque bytes) + `signer_key_reference` (key ID, SPIFFE SVID, DID). The ledger stores but doesn't verify — downstream checks the signature against the writer's public key. Proves WHO wrote the entry.
+- **Attestation reports** - optional `attestation_report` (opaque bytes — SGX quote, SEV-SNP report, RATS EAT token). Proves WHERE the entry was written (verified runtime). Three layers of proof, all stored, none interpreted by the ledger.
+
+## Three Layers of Proof
+
+```
+Layer 1: entry_hash            → content wasn't modified (ledger verifies)
+Layer 2: writer_signature      → who wrote it (verifier checks against public key)
+         signer_key_reference  → which key to use
+Layer 3: attestation_report    → where it was written (verifier checks against hardware root)
+```
+
+All optional. All backward compatible. All identity-neutral — the ledger stores opaque bytes for Ed25519, ECDSA, SPIFFE SVIDs, SGX quotes, or any format the writer uses.
 
 ## Proof Receipts
 

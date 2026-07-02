@@ -255,6 +255,7 @@ export default function App() {
                   </div>
                   <ClosingPoint text="Proves: entries were not modified after submission. V2 canonical hash commits to all fields — content, agent, source, correlation, chain position, timestamp." />
                   <ClosingPoint text="Proves: proof receipts are tamper-evident. Swap the content, agent, or correlation ID and verification fails." />
+                  <ClosingPoint text="Proves: writer identity via optional signatures (Ed25519, SPIFFE SVIDs, DIDs). Proves runtime integrity via optional attestation reports (SGX, SEV-SNP). Three layers of proof, all stored, none interpreted by the ledger." />
                   <ClosingPoint text="Proves: cross-system events are correlatable by trace ID without shared identity." />
                   <ClosingPoint text="Does not prove: events are accurate when submitted. Attestation is the writer's responsibility. Receipts prove a claim was made, not that it's true. Integrity ≠ accuracy." />
                 </div>
@@ -291,10 +292,10 @@ export default function App() {
                     Evidence depth
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
-                    <EvidenceStat value="116" label="automated tests" />
-                    <EvidenceStat value="18" label="test categories" />
+                    <EvidenceStat value="146" label="automated tests" />
+                    <EvidenceStat value="21" label="test categories" />
                     <EvidenceStat value="10" label="security tests (injection, validation, permissions)" />
-                    <EvidenceStat value="20" label="adversarial + receipt red team" />
+                    <EvidenceStat value="25" label="adversarial + receipt + signature red team" />
                     <EvidenceStat value="2" label="live systems tested (OpenShell + Kagenti)" />
                     <EvidenceStat value="0" label="tests failing" />
                   </div>
