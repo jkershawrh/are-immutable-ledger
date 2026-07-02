@@ -44,9 +44,17 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
                 correlation_id: empty_to_none(input.correlation_id),
                 idempotency_key: empty_to_none(input.idempotency_key),
                 input_hash: empty_to_none(input.input_hash),
-                writer_signature: if input.writer_signature.is_empty() { None } else { Some(input.writer_signature) },
+                writer_signature: if input.writer_signature.is_empty() {
+                    None
+                } else {
+                    Some(input.writer_signature)
+                },
                 signer_key_reference: empty_to_none(input.signer_key_reference),
-                attestation_report: if input.attestation_report.is_empty() { None } else { Some(input.attestation_report) },
+                attestation_report: if input.attestation_report.is_empty() {
+                    None
+                } else {
+                    Some(input.attestation_report)
+                },
             })
             .await
             .map_err(map_err)?;
@@ -129,10 +137,10 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
                     chain_position: entry.chain_position,
                     written_ts: entry.written_ts.timestamp_millis(),
                     idempotency_key: entry.idempotency_key.unwrap_or_default(),
-                input_hash: entry.input_hash.unwrap_or_default(),
-                writer_signature: entry.writer_signature.unwrap_or_default(),
-                signer_key_reference: entry.signer_key_reference.unwrap_or_default(),
-                attestation_report: entry.attestation_report.unwrap_or_default(),
+                    input_hash: entry.input_hash.unwrap_or_default(),
+                    writer_signature: entry.writer_signature.unwrap_or_default(),
+                    signer_key_reference: entry.signer_key_reference.unwrap_or_default(),
+                    attestation_report: entry.attestation_report.unwrap_or_default(),
                 })
                 .collect(),
             next_page_token: next_token.unwrap_or_default(),
@@ -253,7 +261,11 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
                 Some(input.attestation_report.clone())
             },
         };
-        let receipt = self.service.issue_receipt(write_input).await.map_err(map_err)?;
+        let receipt = self
+            .service
+            .issue_receipt(write_input)
+            .await
+            .map_err(map_err)?;
         Ok(Response::new(pb::ProofReceipt {
             entry_hash: receipt.entry_hash,
             entry_type: input.entry_type.clone(),
@@ -273,7 +285,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
     ) -> Result<Response<pb::GetEntryResponse>, Status> {
         let input = request.get_ref();
         if input.entry_hash.is_empty() || input.entry_type.is_empty() {
-            return Err(Status::invalid_argument("entry_hash and entry_type are required"));
+            return Err(Status::invalid_argument(
+                "entry_hash and entry_type are required",
+            ));
         }
         let entry = self
             .service
@@ -308,7 +322,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
     ) -> Result<Response<pb::VerifyProofResponse>, Status> {
         let input = request.get_ref();
         if input.entry_hash.is_empty() || input.entry_type.is_empty() {
-            return Err(Status::invalid_argument("entry_hash and entry_type are required"));
+            return Err(Status::invalid_argument(
+                "entry_hash and entry_type are required",
+            ));
         }
         let output = self
             .service
@@ -429,6 +445,10 @@ mod tests {
                 source_id: "ARE-FOUNDATION-PROOF".to_string(),
                 correlation_id: String::new(),
                 idempotency_key: "grpc-unit-1".to_string(),
+                input_hash: String::new(),
+                writer_signature: Vec::new(),
+                signer_key_reference: String::new(),
+                attestation_report: Vec::new(),
             }),
         )
         .await

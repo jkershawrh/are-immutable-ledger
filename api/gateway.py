@@ -24,9 +24,30 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sdks", "python
 from ledger_client import LedgerClient
 
 app = Flask(__name__)
-CORS(app)
 
 ENDPOINT = os.environ.get("LEDGER_ENDPOINT", "localhost:19292")
+GATEWAY_API_TOKEN = os.environ.get("GATEWAY_API_TOKEN", "")
+DEFAULT_CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+def cors_origins():
+    configured = os.environ.get("GATEWAY_CORS_ORIGINS", "")
+    if not configured:
+        return DEFAULT_CORS_ORIGINS
+    return [origin.strip() for origin in configured.split(",") if origin.strip()]
+
+
+CORS(app, origins=cors_origins())
+
+
+@app.before_request
+def authorize_gateway_request():
+    if request.method == "OPTIONS" or not GATEWAY_API_TOKEN:
+        return None
+    expected = f"Bearer {GATEWAY_API_TOKEN}"
+    if request.headers.get("Authorization", "") != expected:
+        return jsonify({"error": "unauthorized"}), 401
+    return None
 
 
 def get_client():
@@ -321,4 +342,6 @@ def get_drift():
 
 if __name__ == "__main__":
     port = int(os.environ.get("GATEWAY_PORT", "18099"))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    host = os.environ.get("GATEWAY_HOST", "127.0.0.1")
+    debug = os.environ.get("GATEWAY_DEBUG", "").lower() in {"1", "true", "yes"}
+    app.run(host=host, port=port, debug=debug)
