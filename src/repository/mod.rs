@@ -452,6 +452,10 @@ mod tests {
                 source_id: "source".to_string(),
                 correlation_id: None,
                 idempotency_key: Some("idem".to_string()),
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
                 previous_hash: "genesis".to_string(),
                 written_ts: Utc::now(),
             })
@@ -482,6 +486,10 @@ mod tests {
                 source_id: "source".to_string(),
                 correlation_id: None,
                 idempotency_key: None,
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
                 previous_hash: "genesis".to_string(),
                 written_ts: Utc::now(),
             })
@@ -496,6 +504,10 @@ mod tests {
                 source_id: "source".to_string(),
                 correlation_id: None,
                 idempotency_key: None,
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
                 previous_hash: "wrong-prev".to_string(),
                 written_ts: Utc::now(),
             })

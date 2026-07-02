@@ -2,7 +2,7 @@
 
 Status: `RED` = failing/untested | `GREEN` = passing | `YELLOW` = partial
 
-Last run: tests/evidence-results.json (92/92 GREEN automated; 10 YELLOW are L7 Proof Explorer CLI + L2.04 + L4.04 — documented but not yet in runner)
+Last run: tests/evidence-results.json (146/146 GREEN automated; 10 matrix items remain YELLOW because they are documented/manual or CLI coverage not yet automated: L2.04, L4.04, L7.01-L7.08)
 
 ---
 
