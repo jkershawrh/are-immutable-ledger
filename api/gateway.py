@@ -51,6 +51,9 @@ def entry_to_dict(e):
         "previous_hash": e.previous_hash,
         "chain_position": e.chain_position,
         "written_ts": e.written_ts,
+        "writer_signature": e.writer_signature.hex() if e.writer_signature else "",
+        "signer_key_reference": e.signer_key_reference if hasattr(e, 'signer_key_reference') else "",
+        "attestation_report": e.attestation_report.hex() if e.attestation_report else "",
     }
 
 
@@ -90,6 +93,9 @@ def issue_receipt():
         correlation_id=body.get("correlation_id", ""),
         idempotency_key=body.get("idempotency_key", ""),
         input_hash=body.get("input_hash", ""),
+        writer_signature=bytes.fromhex(body["writer_signature"]) if body.get("writer_signature") else b"",
+        signer_key_reference=body.get("signer_key_reference", ""),
+        attestation_report=bytes.fromhex(body["attestation_report"]) if body.get("attestation_report") else b"",
     )
     c.close()
     return jsonify({
@@ -99,6 +105,9 @@ def issue_receipt():
         "written_ts": receipt.written_ts,
         "entry_id": receipt.entry_id,
         "input_hash": receipt.input_hash,
+        "writer_signature": receipt.writer_signature.hex() if receipt.writer_signature else "",
+        "signer_key_reference": receipt.signer_key_reference,
+        "attestation_report": receipt.attestation_report.hex() if receipt.attestation_report else "",
     }), 201
 
 
@@ -122,6 +131,9 @@ def verify_proof():
         "written_ts": v.written_ts,
         "chain_position": v.chain_position,
         "failure_reason": v.failure_reason or "",
+        "writer_signature": v.writer_signature.hex() if v.writer_signature else "",
+        "signer_key_reference": v.signer_key_reference,
+        "attestation_report": v.attestation_report.hex() if v.attestation_report else "",
     })
 
 
