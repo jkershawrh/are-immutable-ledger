@@ -110,6 +110,10 @@ pub enum ServiceError {
 
 #[async_trait]
 pub trait EventPublisher: Send + Sync {
+    fn is_enabled(&self) -> bool {
+        true
+    }
+
     async fn publish(&self, key: &str, payload: &str) -> Result<(), String>;
 }
 
@@ -118,8 +122,12 @@ pub struct NoopEventPublisher;
 
 #[async_trait]
 impl EventPublisher for NoopEventPublisher {
+    fn is_enabled(&self) -> bool {
+        false
+    }
+
     async fn publish(&self, _key: &str, _payload: &str) -> Result<(), String> {
-        Ok(())
+        Err("event publisher is not configured".to_string())
     }
 }
 
@@ -139,7 +147,11 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
             config,
             chain_halted: Arc::new(RwLock::new(std::collections::HashSet::new())),
         };
-        service.start_outbox_processor();
+        if service.publisher.is_enabled() {
+            service.start_outbox_processor();
+        } else {
+            warn!("event publisher disabled; outbox records will remain pending");
+        }
         service
     }
 
@@ -472,7 +484,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
                 source_id: &entry.source_id,
                 correlation_id: entry.correlation_id.as_deref(),
                 idempotency_key: entry.idempotency_key.as_deref(),
-            input_hash: entry.input_hash.as_deref(),
+                input_hash: entry.input_hash.as_deref(),
                 chain_position: entry.chain_position,
                 written_ts_ms: entry.written_ts.timestamp_millis(),
                 previous_hash: &entry.previous_hash,
@@ -660,6 +672,11 @@ mod tests {
         )
     }
 
+    #[test]
+    fn noop_event_publisher_reports_disabled() {
+        assert!(!NoopEventPublisher.is_enabled());
+    }
+
     #[tokio::test]
     async fn write_then_get_and_verify() {
         let service = service();
@@ -672,6 +689,10 @@ mod tests {
                 source_id: "ARE-FOUNDATION-PROOF".to_string(),
                 correlation_id: None,
                 idempotency_key: None,
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await
             .expect("write");
@@ -692,6 +713,10 @@ mod tests {
                 source_id: "ARE-FOUNDATION-PROOF".to_string(),
                 correlation_id: None,
                 idempotency_key: Some("idem-1".to_string()),
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await
             .expect("first");
@@ -704,6 +729,10 @@ mod tests {
                 source_id: "ARE-FOUNDATION-PROOF".to_string(),
                 correlation_id: None,
                 idempotency_key: Some("idem-1".to_string()),
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await
             .expect("second");
@@ -723,6 +752,10 @@ mod tests {
                 source_id: "ARE-FOUNDATION-PROOF".to_string(),
                 correlation_id: Some("trace-1".to_string()),
                 idempotency_key: Some("idem-conflict".to_string()),
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await
             .expect("first");
@@ -735,6 +768,10 @@ mod tests {
                 source_id: "ARE-FOUNDATION-PROOF".to_string(),
                 correlation_id: Some("trace-1".to_string()),
                 idempotency_key: Some("idem-conflict".to_string()),
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await
             .expect_err("conflicting retry should fail");
@@ -753,6 +790,10 @@ mod tests {
                 source_id: "ARE-FOUNDATION-PROOF".to_string(),
                 correlation_id: None,
                 idempotency_key: None,
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await
             .expect_err("content should be rejected");
@@ -772,6 +813,10 @@ mod tests {
                     source_id: "ARE-A-S1-004".to_string(),
                     correlation_id: None,
                     idempotency_key: Some(format!("idem-{}", i)),
+                    input_hash: None,
+                    writer_signature: None,
+                    signer_key_reference: None,
+                    attestation_report: None,
                 })
                 .await
                 .expect("write");
@@ -800,6 +845,10 @@ mod tests {
                     source_id: "ARE-FOUNDATION-PROOF".to_string(),
                     correlation_id: None,
                     idempotency_key: Some(format!("idem-{}", i)),
+                    input_hash: None,
+                    writer_signature: None,
+                    signer_key_reference: None,
+                    attestation_report: None,
                 })
                 .await
             }));
@@ -837,6 +886,10 @@ mod tests {
                         None
                     },
                     idempotency_key: Some(format!("page-{}", i)),
+                    input_hash: None,
+                    writer_signature: None,
+                    signer_key_reference: None,
+                    attestation_report: None,
                 })
                 .await
                 .expect("write");
@@ -888,6 +941,10 @@ mod tests {
                     source_id: "openshell-supervisor".to_string(),
                     correlation_id: None,
                     idempotency_key: Some(format!("prefix-{suffix}")),
+                    input_hash: None,
+                    writer_signature: None,
+                    signer_key_reference: None,
+                    attestation_report: None,
                 })
                 .await
                 .expect("write");
@@ -901,6 +958,10 @@ mod tests {
                 source_id: "kagenti".to_string(),
                 correlation_id: None,
                 idempotency_key: Some("prefix-other".to_string()),
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await
             .expect("write");
@@ -932,6 +993,10 @@ mod tests {
                 source_id: "ARE-FOUNDATION-PROOF".to_string(),
                 correlation_id: None,
                 idempotency_key: Some("bounds-1".to_string()),
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await
             .expect("seed");
@@ -996,6 +1061,19 @@ mod tests {
         ) -> Result<Option<LedgerEntryRecord>, RepositoryError> {
             Ok(None)
         }
+        async fn get_entry_by_hash(
+            &self,
+            entry_type: &str,
+            entry_hash: &str,
+        ) -> Result<LedgerEntryRecord, RepositoryError> {
+            self.entries
+                .lock()
+                .await
+                .values()
+                .find(|entry| entry.entry_type == entry_type && entry.entry_hash == entry_hash)
+                .cloned()
+                .ok_or(RepositoryError::NotFound)
+        }
         async fn pending_outbox(&self) -> Result<Vec<OutboxRecord>, RepositoryError> {
             Ok(Vec::new())
         }
@@ -1016,6 +1094,10 @@ mod tests {
             source_id: "ARE-FOUNDATION-PROOF".to_string(),
             correlation_id: None,
             idempotency_key: None,
+            input_hash: None,
+            writer_signature: None,
+            signer_key_reference: None,
+            attestation_report: None,
             entry_hash: "bad-hash".to_string(),
             previous_hash: sha256_hex(b"ARE_LEDGER_GENESIS"),
             chain_position: 1,
@@ -1070,6 +1152,13 @@ mod tests {
         ) -> Result<Option<LedgerEntryRecord>, RepositoryError> {
             Err(self.error.clone())
         }
+        async fn get_entry_by_hash(
+            &self,
+            _entry_type: &str,
+            _entry_hash: &str,
+        ) -> Result<LedgerEntryRecord, RepositoryError> {
+            Err(self.error.clone())
+        }
         async fn pending_outbox(&self) -> Result<Vec<OutboxRecord>, RepositoryError> {
             Ok(Vec::new())
         }
@@ -1093,6 +1182,10 @@ mod tests {
                 source_id: "ARE-FOUNDATION-PROOF".to_string(),
                 correlation_id: None,
                 idempotency_key: Some("unavail".to_string()),
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await
             .expect_err("must fail");
@@ -1111,6 +1204,10 @@ mod tests {
                 source_id: "src".to_string(),
                 correlation_id: None,
                 idempotency_key: None,
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await
             .expect_err("missing field should fail");
@@ -1165,6 +1262,13 @@ mod tests {
             ) -> Result<Option<LedgerEntryRecord>, RepositoryError> {
                 Ok(None)
             }
+            async fn get_entry_by_hash(
+                &self,
+                _entry_type: &str,
+                _entry_hash: &str,
+            ) -> Result<LedgerEntryRecord, RepositoryError> {
+                Err(RepositoryError::NotFound)
+            }
             async fn pending_outbox(&self) -> Result<Vec<OutboxRecord>, RepositoryError> {
                 Ok(Vec::new())
             }
@@ -1187,6 +1291,10 @@ mod tests {
                 source_id: "src".to_string(),
                 correlation_id: None,
                 idempotency_key: None,
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await;
         assert!(matches!(first, Err(ServiceError::Internal(_))));
@@ -1200,6 +1308,10 @@ mod tests {
                 source_id: "src".to_string(),
                 correlation_id: None,
                 idempotency_key: None,
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await;
         assert!(matches!(second, Err(ServiceError::Unavailable)));
@@ -1217,6 +1329,10 @@ mod tests {
             source_id: "ARE-FOUNDATION-PROOF".to_string(),
             correlation_id: None,
             idempotency_key: None,
+            input_hash: None,
+            writer_signature: None,
+            signer_key_reference: None,
+            attestation_report: None,
             entry_hash: "hash".to_string(),
             previous_hash: "missing-prev".to_string(),
             chain_position: 2,
@@ -1254,6 +1370,7 @@ mod tests {
             source_id: "ARE-FOUNDATION-PROOF",
             correlation_id: None,
             idempotency_key: None,
+            input_hash: None,
             chain_position: 1,
             written_ts_ms: entry1_ts.timestamp_millis(),
             previous_hash: &entry1_prev,
@@ -1267,6 +1384,10 @@ mod tests {
             source_id: "ARE-FOUNDATION-PROOF".to_string(),
             correlation_id: None,
             idempotency_key: None,
+            input_hash: None,
+            writer_signature: None,
+            signer_key_reference: None,
+            attestation_report: None,
             entry_hash: entry1_hash,
             previous_hash: entry1_prev,
             chain_position: 1,
@@ -1281,6 +1402,10 @@ mod tests {
             source_id: "ARE-FOUNDATION-PROOF".to_string(),
             correlation_id: None,
             idempotency_key: None,
+            input_hash: None,
+            writer_signature: None,
+            signer_key_reference: None,
+            attestation_report: None,
             entry_hash: "bad".to_string(),
             previous_hash: "wrong-prev".to_string(),
             chain_position: 2,
@@ -1318,6 +1443,10 @@ mod tests {
                 source_id: "ARE-TEST".to_string(),
                 correlation_id: None,
                 idempotency_key: None,
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await
             .expect("write");
@@ -1346,6 +1475,10 @@ mod tests {
                 source_id: "ARE-TEST".to_string(),
                 correlation_id: Some("trace-original".to_string()),
                 idempotency_key: Some("corr-tamper".to_string()),
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await
             .expect("write");
@@ -1374,6 +1507,10 @@ mod tests {
                 source_id: "ARE-TEST".to_string(),
                 correlation_id: None,
                 idempotency_key: None,
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await
             .expect("write");

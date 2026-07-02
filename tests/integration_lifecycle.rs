@@ -37,6 +37,10 @@ async fn it001_write_read_verify_cycle() {
             source_id: "ARE-FOUNDATION-PROOF".to_string(),
             correlation_id: None,
             idempotency_key: None,
+            input_hash: None,
+            writer_signature: None,
+            signer_key_reference: None,
+            attestation_report: None,
         })
         .await
         .expect("write");
@@ -64,6 +68,10 @@ async fn it002_chain_integrity_for_many_entries() {
                 source_id: "ARE-A-S0-001".to_string(),
                 correlation_id: None,
                 idempotency_key: Some(format!("idem-{}", i)),
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
             })
             .await
             .expect("write");
@@ -110,6 +118,10 @@ async fn it003_concurrent_multi_type_writes() {
                     source_id: "ARE-A-S0-003".to_string(),
                     correlation_id: None,
                     idempotency_key: Some(format!("{}-idem-{}", current_type, i)),
+                    input_hash: None,
+                    writer_signature: None,
+                    signer_key_reference: None,
+                    attestation_report: None,
                 })
                 .await
                 .expect("write");
@@ -145,6 +157,10 @@ async fn it004_delegation_admitted_entry_type_chain() {
             source_id: "ARE-A-S1-NTA".to_string(),
             correlation_id: None,
             idempotency_key: Some("idem-deleg-1".to_string()),
+            input_hash: None,
+            writer_signature: None,
+            signer_key_reference: None,
+            attestation_report: None,
         })
         .await
         .expect("write");

@@ -96,6 +96,7 @@ mod tests {
             source_id: "ARE-FOUNDATION-PROOF",
             correlation_id: Some("trace-1"),
             idempotency_key: Some("idem-1"),
+            input_hash: Some("payload-sha256"),
             chain_position: 7,
             written_ts_ms,
             previous_hash,

@@ -60,6 +60,10 @@ async fn ig006_grpc_contract_smoke() {
             source_id: "ARE-FOUNDATION-PROOF".to_string(),
             correlation_id: String::new(),
             idempotency_key: "grpc-smoke".to_string(),
+            input_hash: String::new(),
+            writer_signature: Vec::new(),
+            signer_key_reference: String::new(),
+            attestation_report: Vec::new(),
         })
         .await
         .expect("write")

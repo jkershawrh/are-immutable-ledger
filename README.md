@@ -120,6 +120,8 @@ The repository keeps the proof surface close to the code:
 - `tests/SECURITY_TESTING.md` documents red-team and hardening checks.
 - `proof-explorer/proof.py verify --all` independently verifies stored chains through the public API.
 
+Current checked-in evidence shows `146/146` automated checks GREEN. The matrix still keeps design-level/manual items as YELLOW until those checks are automated in `tests/run_evidence.py`.
+
 Useful local verification commands:
 
 ```bash
@@ -135,11 +137,15 @@ The service exposes Prometheus metrics at `/metrics` on `ARE_LEDGER_METRICS_PORT
 - `are_ledger_chain_verify_failure_total`
 - `are_outbox_publish_failure_total`
 
+The standalone binary stores outbox rows but wires a disabled/no-op publisher by default; without a real publisher implementation, outbox rows remain `PENDING` instead of being marked delivered. Treat Kafka configuration in the demo as a placeholder until an external publisher is wired.
+
 Hash compatibility note: this pre-release standalone ledger uses the V2 canonical proof envelope as its initial public contract. No production data has been written with the earlier experimental hash shape; if you have local demo data from before V2, reload it.
 
 ## Security Notes
 
 For shared deployments, put the gRPC listener behind TLS/mTLS-capable infrastructure and set `ARE_LEDGER_API_TOKEN`; clients can pass the token explicitly or through the same environment variable. Set `ARE_LEDGER_SHUTDOWN_TOKEN` only for controlled graceful-shutdown drills, and call `/shutdownz` with `Authorization: Bearer <token>`.
+
+The optional Flask REST gateway is local-dev by default: it binds to `127.0.0.1`, runs with debug disabled, and only allows localhost Vite origins unless `GATEWAY_CORS_ORIGINS` is set. For shared use, set `GATEWAY_API_TOKEN`, keep it behind TLS/auth-aware infrastructure, and only widen `GATEWAY_HOST` or CORS origins intentionally.
 
 ## Demo: Cross-System Proof
 
