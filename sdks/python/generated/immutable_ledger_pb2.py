@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16immutable_ledger.proto\x12\rare.ledger.v1\"\xb8\x01\n\x11WriteEntryRequest\x12\x12\n\nentry_type\x18\x01 \x01(\t\x12\x10\n\x08\x61gent_id\x18\x02 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\x0c\x12\x14\n\x0c\x63ontent_type\x18\x04 \x01(\t\x12\x11\n\tsource_id\x18\x05 \x01(\t\x12\x16\n\x0e\x63orrelation_id\x18\x06 \x01(\t\x12\x17\n\x0fidempotency_key\x18\x07 \x01(\t\x12\x12\n\ninput_hash\x18\x08 \x01(\t\"f\n\x12WriteEntryResponse\x12\x10\n\x08\x65ntry_id\x18\x01 \x01(\t\x12\x12\n\nentry_hash\x18\x02 \x01(\t\x12\x16\n\x0e\x63hain_position\x18\x03 \x01(\t\x12\x12\n\nwritten_ts\x18\x04 \x01(\x03\"#\n\x0fGetEntryRequest\x12\x10\n\x08\x65ntry_id\x18\x01 \x01(\t\"=\n\x10GetEntryResponse\x12)\n\x05\x65ntry\x18\x01 \x01(\x0b\x32\x1a.are.ledger.v1.LedgerEntry\"\xad\x01\n\x13QueryEntriesRequest\x12\x12\n\nentry_type\x18\x01 \x01(\t\x12\x10\n\x08\x61gent_id\x18\x02 \x01(\t\x12\x11\n\tsource_id\x18\x03 \x01(\t\x12\x16\n\x0e\x63orrelation_id\x18\x04 \x01(\t\x12\x0f\n\x07\x66rom_ts\x18\x05 \x01(\x03\x12\r\n\x05to_ts\x18\x06 \x01(\x03\x12\x11\n\tpage_size\x18\x07 \x01(\x05\x12\x12\n\npage_token\x18\x08 \x01(\t\"q\n\x14QueryEntriesResponse\x12+\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x1a.are.ledger.v1.LedgerEntry\x12\x17\n\x0fnext_page_token\x18\x02 \x01(\t\x12\x13\n\x0btotal_count\x18\x03 \x01(\x03\"&\n\x12VerifyEntryRequest\x12\x10\n\x08\x65ntry_id\x18\x01 \x01(\t\"m\n\x13VerifyEntryResponse\x12\x10\n\x08\x65ntry_id\x18\x01 \x01(\t\x12\x12\n\nhash_valid\x18\x02 \x01(\x08\x12\x18\n\x10\x63hain_link_valid\x18\x03 \x01(\x08\x12\x16\n\x0e\x66\x61ilure_reason\x18\x04 \x01(\t\"V\n\x12VerifyChainRequest\x12\x12\n\nentry_type\x18\x01 \x01(\t\x12\x16\n\x0estart_entry_id\x18\x02 \x01(\t\x12\x14\n\x0c\x65nd_entry_id\x18\x03 \x01(\t\"{\n\x13VerifyChainResponse\x12\x13\n\x0b\x63hain_valid\x18\x01 \x01(\x08\x12\x17\n\x0f\x65ntries_checked\x18\x02 \x01(\x03\x12\x1e\n\x16\x66irst_invalid_entry_id\x18\x03 \x01(\t\x12\x16\n\x0e\x66\x61ilure_reason\x18\x04 \x01(\t\"(\n\x12GetChainTipRequest\x12\x12\n\nentry_type\x18\x01 \x01(\t\"g\n\x13GetChainTipResponse\x12\x10\n\x08\x65ntry_id\x18\x01 \x01(\t\x12\x12\n\nentry_hash\x18\x02 \x01(\t\x12\x16\n\x0e\x63hain_position\x18\x03 \x01(\x03\x12\x12\n\nwritten_ts\x18\x04 \x01(\x03\"\x88\x01\n\x0cProofReceipt\x12\x12\n\nentry_hash\x18\x01 \x01(\t\x12\x12\n\nentry_type\x18\x02 \x01(\t\x12\x16\n\x0e\x63hain_position\x18\x03 \x01(\x03\x12\x12\n\nwritten_ts\x18\x04 \x01(\x03\x12\x10\n\x08\x65ntry_id\x18\x05 \x01(\t\x12\x12\n\ninput_hash\x18\x06 \x01(\t\"<\n\x12VerifyProofRequest\x12\x12\n\nentry_hash\x18\x01 \x01(\t\x12\x12\n\nentry_type\x18\x02 \x01(\t\"\xe3\x01\n\x13VerifyProofResponse\x12\r\n\x05valid\x18\x01 \x01(\x08\x12\x12\n\nentry_type\x18\x02 \x01(\t\x12\x10\n\x08\x61gent_id\x18\x03 \x01(\t\x12\x12\n\nwritten_ts\x18\x04 \x01(\x03\x12\x16\n\x0e\x63hain_position\x18\x05 \x01(\x03\x12\x16\n\x0e\x66\x61ilure_reason\x18\x06 \x01(\t\x12\x11\n\tsource_id\x18\x07 \x01(\t\x12\x16\n\x0e\x63orrelation_id\x18\x08 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\t \x01(\t\x12\x12\n\ninput_hash\x18\n \x01(\t\"?\n\x15GetEntryByHashRequest\x12\x12\n\nentry_hash\x18\x01 \x01(\t\x12\x12\n\nentry_type\x18\x02 \x01(\t\"\x9b\x02\n\x0bLedgerEntry\x12\x10\n\x08\x65ntry_id\x18\x01 \x01(\t\x12\x12\n\nentry_type\x18\x02 \x01(\t\x12\x10\n\x08\x61gent_id\x18\x03 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x04 \x01(\x0c\x12\x14\n\x0c\x63ontent_type\x18\x05 \x01(\t\x12\x11\n\tsource_id\x18\x06 \x01(\t\x12\x16\n\x0e\x63orrelation_id\x18\x07 \x01(\t\x12\x12\n\nentry_hash\x18\x08 \x01(\t\x12\x15\n\rprevious_hash\x18\t \x01(\t\x12\x16\n\x0e\x63hain_position\x18\n \x01(\x03\x12\x12\n\nwritten_ts\x18\x0b \x01(\x03\x12\x17\n\x0fidempotency_key\x18\x0c \x01(\t\x12\x12\n\ninput_hash\x18\r \x01(\t2\x91\x06\n\x16ImmutableLedgerService\x12Q\n\nWriteEntry\x12 .are.ledger.v1.WriteEntryRequest\x1a!.are.ledger.v1.WriteEntryResponse\x12K\n\x08GetEntry\x12\x1e.are.ledger.v1.GetEntryRequest\x1a\x1f.are.ledger.v1.GetEntryResponse\x12W\n\x0cQueryEntries\x12\".are.ledger.v1.QueryEntriesRequest\x1a#.are.ledger.v1.QueryEntriesResponse\x12T\n\x0bVerifyEntry\x12!.are.ledger.v1.VerifyEntryRequest\x1a\".are.ledger.v1.VerifyEntryResponse\x12T\n\x0bVerifyChain\x12!.are.ledger.v1.VerifyChainRequest\x1a\".are.ledger.v1.VerifyChainResponse\x12T\n\x0bGetChainTip\x12!.are.ledger.v1.GetChainTipRequest\x1a\".are.ledger.v1.GetChainTipResponse\x12M\n\x0cIssueReceipt\x12 .are.ledger.v1.WriteEntryRequest\x1a\x1b.are.ledger.v1.ProofReceipt\x12T\n\x0bVerifyProof\x12!.are.ledger.v1.VerifyProofRequest\x1a\".are.ledger.v1.VerifyProofResponse\x12W\n\x0eGetEntryByHash\x12$.are.ledger.v1.GetEntryByHashRequest\x1a\x1f.are.ledger.v1.GetEntryResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16immutable_ledger.proto\x12\rare.ledger.v1\"\x8c\x02\n\x11WriteEntryRequest\x12\x12\n\nentry_type\x18\x01 \x01(\t\x12\x10\n\x08\x61gent_id\x18\x02 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\x0c\x12\x14\n\x0c\x63ontent_type\x18\x04 \x01(\t\x12\x11\n\tsource_id\x18\x05 \x01(\t\x12\x16\n\x0e\x63orrelation_id\x18\x06 \x01(\t\x12\x17\n\x0fidempotency_key\x18\x07 \x01(\t\x12\x12\n\ninput_hash\x18\x08 \x01(\t\x12\x18\n\x10writer_signature\x18\t \x01(\x0c\x12\x1c\n\x14signer_key_reference\x18\n \x01(\t\x12\x1a\n\x12\x61ttestation_report\x18\x0b \x01(\x0c\"f\n\x12WriteEntryResponse\x12\x10\n\x08\x65ntry_id\x18\x01 \x01(\t\x12\x12\n\nentry_hash\x18\x02 \x01(\t\x12\x16\n\x0e\x63hain_position\x18\x03 \x01(\t\x12\x12\n\nwritten_ts\x18\x04 \x01(\x03\"#\n\x0fGetEntryRequest\x12\x10\n\x08\x65ntry_id\x18\x01 \x01(\t\"=\n\x10GetEntryResponse\x12)\n\x05\x65ntry\x18\x01 \x01(\x0b\x32\x1a.are.ledger.v1.LedgerEntry\"\xad\x01\n\x13QueryEntriesRequest\x12\x12\n\nentry_type\x18\x01 \x01(\t\x12\x10\n\x08\x61gent_id\x18\x02 \x01(\t\x12\x11\n\tsource_id\x18\x03 \x01(\t\x12\x16\n\x0e\x63orrelation_id\x18\x04 \x01(\t\x12\x0f\n\x07\x66rom_ts\x18\x05 \x01(\x03\x12\r\n\x05to_ts\x18\x06 \x01(\x03\x12\x11\n\tpage_size\x18\x07 \x01(\x05\x12\x12\n\npage_token\x18\x08 \x01(\t\"q\n\x14QueryEntriesResponse\x12+\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x1a.are.ledger.v1.LedgerEntry\x12\x17\n\x0fnext_page_token\x18\x02 \x01(\t\x12\x13\n\x0btotal_count\x18\x03 \x01(\x03\"&\n\x12VerifyEntryRequest\x12\x10\n\x08\x65ntry_id\x18\x01 \x01(\t\"m\n\x13VerifyEntryResponse\x12\x10\n\x08\x65ntry_id\x18\x01 \x01(\t\x12\x12\n\nhash_valid\x18\x02 \x01(\x08\x12\x18\n\x10\x63hain_link_valid\x18\x03 \x01(\x08\x12\x16\n\x0e\x66\x61ilure_reason\x18\x04 \x01(\t\"V\n\x12VerifyChainRequest\x12\x12\n\nentry_type\x18\x01 \x01(\t\x12\x16\n\x0estart_entry_id\x18\x02 \x01(\t\x12\x14\n\x0c\x65nd_entry_id\x18\x03 \x01(\t\"{\n\x13VerifyChainResponse\x12\x13\n\x0b\x63hain_valid\x18\x01 \x01(\x08\x12\x17\n\x0f\x65ntries_checked\x18\x02 \x01(\x03\x12\x1e\n\x16\x66irst_invalid_entry_id\x18\x03 \x01(\t\x12\x16\n\x0e\x66\x61ilure_reason\x18\x04 \x01(\t\"(\n\x12GetChainTipRequest\x12\x12\n\nentry_type\x18\x01 \x01(\t\"g\n\x13GetChainTipResponse\x12\x10\n\x08\x65ntry_id\x18\x01 \x01(\t\x12\x12\n\nentry_hash\x18\x02 \x01(\t\x12\x16\n\x0e\x63hain_position\x18\x03 \x01(\x03\x12\x12\n\nwritten_ts\x18\x04 \x01(\x03\"\xdc\x01\n\x0cProofReceipt\x12\x12\n\nentry_hash\x18\x01 \x01(\t\x12\x12\n\nentry_type\x18\x02 \x01(\t\x12\x16\n\x0e\x63hain_position\x18\x03 \x01(\x03\x12\x12\n\nwritten_ts\x18\x04 \x01(\x03\x12\x10\n\x08\x65ntry_id\x18\x05 \x01(\t\x12\x12\n\ninput_hash\x18\x06 \x01(\t\x12\x18\n\x10writer_signature\x18\x07 \x01(\x0c\x12\x1c\n\x14signer_key_reference\x18\x08 \x01(\t\x12\x1a\n\x12\x61ttestation_report\x18\t \x01(\x0c\"<\n\x12VerifyProofRequest\x12\x12\n\nentry_hash\x18\x01 \x01(\t\x12\x12\n\nentry_type\x18\x02 \x01(\t\"\xb7\x02\n\x13VerifyProofResponse\x12\r\n\x05valid\x18\x01 \x01(\x08\x12\x12\n\nentry_type\x18\x02 \x01(\t\x12\x10\n\x08\x61gent_id\x18\x03 \x01(\t\x12\x12\n\nwritten_ts\x18\x04 \x01(\x03\x12\x16\n\x0e\x63hain_position\x18\x05 \x01(\x03\x12\x16\n\x0e\x66\x61ilure_reason\x18\x06 \x01(\t\x12\x11\n\tsource_id\x18\x07 \x01(\t\x12\x16\n\x0e\x63orrelation_id\x18\x08 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\t \x01(\t\x12\x12\n\ninput_hash\x18\n \x01(\t\x12\x18\n\x10writer_signature\x18\x0b \x01(\x0c\x12\x1c\n\x14signer_key_reference\x18\x0c \x01(\t\x12\x1a\n\x12\x61ttestation_report\x18\r \x01(\x0c\"?\n\x15GetEntryByHashRequest\x12\x12\n\nentry_hash\x18\x01 \x01(\t\x12\x12\n\nentry_type\x18\x02 \x01(\t\"\xef\x02\n\x0bLedgerEntry\x12\x10\n\x08\x65ntry_id\x18\x01 \x01(\t\x12\x12\n\nentry_type\x18\x02 \x01(\t\x12\x10\n\x08\x61gent_id\x18\x03 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x04 \x01(\x0c\x12\x14\n\x0c\x63ontent_type\x18\x05 \x01(\t\x12\x11\n\tsource_id\x18\x06 \x01(\t\x12\x16\n\x0e\x63orrelation_id\x18\x07 \x01(\t\x12\x12\n\nentry_hash\x18\x08 \x01(\t\x12\x15\n\rprevious_hash\x18\t \x01(\t\x12\x16\n\x0e\x63hain_position\x18\n \x01(\x03\x12\x12\n\nwritten_ts\x18\x0b \x01(\x03\x12\x17\n\x0fidempotency_key\x18\x0c \x01(\t\x12\x12\n\ninput_hash\x18\r \x01(\t\x12\x18\n\x10writer_signature\x18\x0e \x01(\x0c\x12\x1c\n\x14signer_key_reference\x18\x0f \x01(\t\x12\x1a\n\x12\x61ttestation_report\x18\x10 \x01(\x0c\x32\x91\x06\n\x16ImmutableLedgerService\x12Q\n\nWriteEntry\x12 .are.ledger.v1.WriteEntryRequest\x1a!.are.ledger.v1.WriteEntryResponse\x12K\n\x08GetEntry\x12\x1e.are.ledger.v1.GetEntryRequest\x1a\x1f.are.ledger.v1.GetEntryResponse\x12W\n\x0cQueryEntries\x12\".are.ledger.v1.QueryEntriesRequest\x1a#.are.ledger.v1.QueryEntriesResponse\x12T\n\x0bVerifyEntry\x12!.are.ledger.v1.VerifyEntryRequest\x1a\".are.ledger.v1.VerifyEntryResponse\x12T\n\x0bVerifyChain\x12!.are.ledger.v1.VerifyChainRequest\x1a\".are.ledger.v1.VerifyChainResponse\x12T\n\x0bGetChainTip\x12!.are.ledger.v1.GetChainTipRequest\x1a\".are.ledger.v1.GetChainTipResponse\x12M\n\x0cIssueReceipt\x12 .are.ledger.v1.WriteEntryRequest\x1a\x1b.are.ledger.v1.ProofReceipt\x12T\n\x0bVerifyProof\x12!.are.ledger.v1.VerifyProofRequest\x1a\".are.ledger.v1.VerifyProofResponse\x12W\n\x0eGetEntryByHash\x12$.are.ledger.v1.GetEntryByHashRequest\x1a\x1f.are.ledger.v1.GetEntryResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,39 +32,39 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'immutable_ledger_pb2', _glo
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_WRITEENTRYREQUEST']._serialized_start=42
-  _globals['_WRITEENTRYREQUEST']._serialized_end=226
-  _globals['_WRITEENTRYRESPONSE']._serialized_start=228
-  _globals['_WRITEENTRYRESPONSE']._serialized_end=330
-  _globals['_GETENTRYREQUEST']._serialized_start=332
-  _globals['_GETENTRYREQUEST']._serialized_end=367
-  _globals['_GETENTRYRESPONSE']._serialized_start=369
-  _globals['_GETENTRYRESPONSE']._serialized_end=430
-  _globals['_QUERYENTRIESREQUEST']._serialized_start=433
-  _globals['_QUERYENTRIESREQUEST']._serialized_end=606
-  _globals['_QUERYENTRIESRESPONSE']._serialized_start=608
-  _globals['_QUERYENTRIESRESPONSE']._serialized_end=721
-  _globals['_VERIFYENTRYREQUEST']._serialized_start=723
-  _globals['_VERIFYENTRYREQUEST']._serialized_end=761
-  _globals['_VERIFYENTRYRESPONSE']._serialized_start=763
-  _globals['_VERIFYENTRYRESPONSE']._serialized_end=872
-  _globals['_VERIFYCHAINREQUEST']._serialized_start=874
-  _globals['_VERIFYCHAINREQUEST']._serialized_end=960
-  _globals['_VERIFYCHAINRESPONSE']._serialized_start=962
-  _globals['_VERIFYCHAINRESPONSE']._serialized_end=1085
-  _globals['_GETCHAINTIPREQUEST']._serialized_start=1087
-  _globals['_GETCHAINTIPREQUEST']._serialized_end=1127
-  _globals['_GETCHAINTIPRESPONSE']._serialized_start=1129
-  _globals['_GETCHAINTIPRESPONSE']._serialized_end=1232
-  _globals['_PROOFRECEIPT']._serialized_start=1235
-  _globals['_PROOFRECEIPT']._serialized_end=1371
-  _globals['_VERIFYPROOFREQUEST']._serialized_start=1373
-  _globals['_VERIFYPROOFREQUEST']._serialized_end=1433
-  _globals['_VERIFYPROOFRESPONSE']._serialized_start=1436
-  _globals['_VERIFYPROOFRESPONSE']._serialized_end=1663
-  _globals['_GETENTRYBYHASHREQUEST']._serialized_start=1665
-  _globals['_GETENTRYBYHASHREQUEST']._serialized_end=1728
-  _globals['_LEDGERENTRY']._serialized_start=1731
-  _globals['_LEDGERENTRY']._serialized_end=2014
-  _globals['_IMMUTABLELEDGERSERVICE']._serialized_start=2017
-  _globals['_IMMUTABLELEDGERSERVICE']._serialized_end=2802
+  _globals['_WRITEENTRYREQUEST']._serialized_end=310
+  _globals['_WRITEENTRYRESPONSE']._serialized_start=312
+  _globals['_WRITEENTRYRESPONSE']._serialized_end=414
+  _globals['_GETENTRYREQUEST']._serialized_start=416
+  _globals['_GETENTRYREQUEST']._serialized_end=451
+  _globals['_GETENTRYRESPONSE']._serialized_start=453
+  _globals['_GETENTRYRESPONSE']._serialized_end=514
+  _globals['_QUERYENTRIESREQUEST']._serialized_start=517
+  _globals['_QUERYENTRIESREQUEST']._serialized_end=690
+  _globals['_QUERYENTRIESRESPONSE']._serialized_start=692
+  _globals['_QUERYENTRIESRESPONSE']._serialized_end=805
+  _globals['_VERIFYENTRYREQUEST']._serialized_start=807
+  _globals['_VERIFYENTRYREQUEST']._serialized_end=845
+  _globals['_VERIFYENTRYRESPONSE']._serialized_start=847
+  _globals['_VERIFYENTRYRESPONSE']._serialized_end=956
+  _globals['_VERIFYCHAINREQUEST']._serialized_start=958
+  _globals['_VERIFYCHAINREQUEST']._serialized_end=1044
+  _globals['_VERIFYCHAINRESPONSE']._serialized_start=1046
+  _globals['_VERIFYCHAINRESPONSE']._serialized_end=1169
+  _globals['_GETCHAINTIPREQUEST']._serialized_start=1171
+  _globals['_GETCHAINTIPREQUEST']._serialized_end=1211
+  _globals['_GETCHAINTIPRESPONSE']._serialized_start=1213
+  _globals['_GETCHAINTIPRESPONSE']._serialized_end=1316
+  _globals['_PROOFRECEIPT']._serialized_start=1319
+  _globals['_PROOFRECEIPT']._serialized_end=1539
+  _globals['_VERIFYPROOFREQUEST']._serialized_start=1541
+  _globals['_VERIFYPROOFREQUEST']._serialized_end=1601
+  _globals['_VERIFYPROOFRESPONSE']._serialized_start=1604
+  _globals['_VERIFYPROOFRESPONSE']._serialized_end=1915
+  _globals['_GETENTRYBYHASHREQUEST']._serialized_start=1917
+  _globals['_GETENTRYBYHASHREQUEST']._serialized_end=1980
+  _globals['_LEDGERENTRY']._serialized_start=1983
+  _globals['_LEDGERENTRY']._serialized_end=2350
+  _globals['_IMMUTABLELEDGERSERVICE']._serialized_start=2353
+  _globals['_IMMUTABLELEDGERSERVICE']._serialized_end=3138
 # @@protoc_insertion_point(module_scope)

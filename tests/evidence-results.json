@@ -1,73 +1,37 @@
 {
-  "timestamp": 1782936702902,
+  "timestamp": 1782969943192,
   "endpoint": "localhost:19292",
-  "total": 11,
-  "green": 11,
+  "total": 5,
+  "green": 5,
   "red": 0,
   "results": [
     {
-      "id": "L19.01",
-      "desc": "CPEX allow decision: issue receipt with policy context",
+      "id": "L21.01",
+      "desc": "Signature replay: copy sig from one entry to another",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L19.02",
-      "desc": "CPEX deny decision: issue receipt with denial reason",
+      "id": "L21.05",
+      "desc": "Signature flood: 100 signed receipts from 5 threads",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L19.03",
-      "desc": "CPEX session taint: allow \u2192 taint \u2192 deny chain",
+      "id": "L21.08",
+      "desc": "SQL injection via signer_key_reference blocked",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L19.04",
-      "desc": "CPEX redaction: input_hash detects pre/post redact payload difference",
+      "id": "L21.09",
+      "desc": "Null bytes in signature handled safely",
       "status": "GREEN",
       "detail": ""
     },
     {
-      "id": "L19.05",
-      "desc": "CPEX token delegation: receipt records audience-scoped credential",
-      "status": "GREEN",
-      "detail": ""
-    },
-    {
-      "id": "L19.06",
-      "desc": "CPEX PII scan deny: receipt records attempted violation",
-      "status": "GREEN",
-      "detail": ""
-    },
-    {
-      "id": "L19.07",
-      "desc": "CPEX multi-hop: three enforcement points, one correlation, all verifiable",
-      "status": "GREEN",
-      "detail": ""
-    },
-    {
-      "id": "L19.08",
-      "desc": "CPEX cross-principal isolation: same session, different users, separate receipts",
-      "status": "GREEN",
-      "detail": ""
-    },
-    {
-      "id": "L19.09",
-      "desc": "CPEX Cedar PDP allow: internal repo access permitted",
-      "status": "GREEN",
-      "detail": ""
-    },
-    {
-      "id": "L19.10",
-      "desc": "CPEX Cedar PDP deny: external repo access blocked",
-      "status": "GREEN",
-      "detail": ""
-    },
-    {
-      "id": "L19.11",
-      "desc": "CPEX APL gate short-circuit: deny before PDP runs",
+      "id": "L21.10",
+      "desc": "Mixed signed + unsigned entries in same chain verify",
       "status": "GREEN",
       "detail": ""
     }

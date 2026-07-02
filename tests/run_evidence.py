@@ -1926,6 +1926,242 @@ def test_l19_08(c):
     assert r_bob.entry_hash != r_alice.entry_hash
 
 
+# ─── L20: Writer Signatures & Attestation ────────────────
+
+@test("L20.01", "IssueReceipt with signature: receipt returns sig + key ref")
+def test_l20_01(c):
+    import ed25519
+    signing_key, verifying_key = ed25519.create_keypair()
+    etype = f"test.l20.sig.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "signed-agent",
+        json.dumps({"check": "passed"}), source_id="test",
+        writer_signature=signing_key.sign(b"test-hash"),
+        signer_key_reference="spiffe://test.local/ns/default/sa/signed-agent")
+    assert receipt.writer_signature, "Receipt should return writer_signature"
+    assert receipt.signer_key_reference == "spiffe://test.local/ns/default/sa/signed-agent"
+
+@test("L20.02", "VerifyProof returns writer_signature + signer_key_reference")
+def test_l20_02(c):
+    import ed25519
+    signing_key, verifying_key = ed25519.create_keypair()
+    etype = f"test.l20.verify.{uuid.uuid4().hex[:8]}"
+    sig = signing_key.sign(b"canonical-hash-placeholder")
+    receipt = c.issue_receipt(etype, "signed-agent",
+        json.dumps({"check": "ok"}), source_id="test",
+        writer_signature=sig,
+        signer_key_reference="key-id-123")
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid
+    assert v.writer_signature == sig, "VerifyProof should return the stored signature"
+    assert v.signer_key_reference == "key-id-123"
+
+@test("L20.03", "GetEntryByHash returns signature fields")
+def test_l20_03(c):
+    etype = f"test.l20.getbyhash.{uuid.uuid4().hex[:8]}"
+    sig = b"mock-signature-bytes-for-test"
+    receipt = c.issue_receipt(etype, "agent",
+        json.dumps({"test": True}), source_id="test",
+        writer_signature=sig, signer_key_reference="did:web:example.com")
+    entry = c.get_entry_by_hash(receipt.entry_hash, etype)
+    assert entry.writer_signature == sig
+    assert entry.signer_key_reference == "did:web:example.com"
+
+@test("L20.04", "Unsigned entries still verify (backward compat)")
+def test_l20_04(c):
+    etype = f"test.l20.nosig.{uuid.uuid4().hex[:8]}"
+    receipt = c.issue_receipt(etype, "unsigned-agent",
+        json.dumps({"no_sig": True}), source_id="test")
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid, "Unsigned entry should still verify"
+    assert v.writer_signature == b"", "No signature expected"
+    assert v.signer_key_reference == "", "No key ref expected"
+
+@test("L20.05", "Ed25519 sign → verify round-trip")
+def test_l20_05(c):
+    import ed25519
+    signing_key, verifying_key = ed25519.create_keypair()
+    etype = f"test.l20.roundtrip.{uuid.uuid4().hex[:8]}"
+    content = json.dumps({"guardrail": "pii_scan", "result": "clean"})
+    # Writer signs content hash
+    content_hash = hashlib.sha256(content.encode()).hexdigest()
+    sig = signing_key.sign(content_hash.encode())
+    receipt = c.issue_receipt(etype, "authbridge",
+        content, source_id="test",
+        writer_signature=sig,
+        signer_key_reference=verifying_key.to_ascii(encoding="hex").decode())
+    # Verifier retrieves and checks
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid
+    vk = ed25519.VerifyingKey(v.signer_key_reference, encoding="hex")
+    try:
+        vk.verify(v.writer_signature, content_hash.encode())
+    except ed25519.BadSignatureError:
+        assert False, "Ed25519 signature verification failed"
+
+@test("L20.06", "Forged signature stored but detectable")
+def test_l20_06(c):
+    import ed25519
+    real_key, real_vk = ed25519.create_keypair()
+    forger_key, forger_vk = ed25519.create_keypair()
+    etype = f"test.l20.forged.{uuid.uuid4().hex[:8]}"
+    content_hash = hashlib.sha256(b"legit-content").hexdigest()
+    forged_sig = forger_key.sign(content_hash.encode())
+    receipt = c.issue_receipt(etype, "agent",
+        json.dumps({"test": True}), source_id="test",
+        writer_signature=forged_sig,
+        signer_key_reference=real_vk.to_ascii(encoding="hex").decode())
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid, "Chain integrity still holds (hash is fine)"
+    vk = ed25519.VerifyingKey(v.signer_key_reference, encoding="hex")
+    try:
+        vk.verify(v.writer_signature, content_hash.encode())
+        assert False, "Forged signature should NOT verify against real key"
+    except ed25519.BadSignatureError:
+        pass  # Expected — forger's sig doesn't match real key
+
+@test("L20.10", "SPIFFE-style key reference round-trip")
+def test_l20_10(c):
+    etype = f"test.l20.spiffe.{uuid.uuid4().hex[:8]}"
+    spiffe_id = "spiffe://kagenti.io/ns/team1/sa/authbridge-proxy"
+    receipt = c.issue_receipt(etype, "authbridge",
+        json.dumps({"test": True}), source_id="test",
+        writer_signature=b"mock-sig",
+        signer_key_reference=spiffe_id)
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.signer_key_reference == spiffe_id
+
+@test("L20.11", "Attestation report stored and returned")
+def test_l20_11(c):
+    etype = f"test.l20.attest.{uuid.uuid4().hex[:8]}"
+    mock_report = b"\x00\x01\x02MOCK-SGX-QUOTE-" + os.urandom(64)
+    receipt = c.issue_receipt(etype, "tee-agent",
+        json.dumps({"enclave": True}), source_id="tee-runtime",
+        attestation_report=mock_report)
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid
+    assert v.attestation_report == mock_report, "Attestation report should round-trip"
+
+@test("L20.12", "Entry with all three layers: hash + sig + attestation")
+def test_l20_12(c):
+    import ed25519
+    signing_key, verifying_key = ed25519.create_keypair()
+    etype = f"test.l20.alllayers.{uuid.uuid4().hex[:8]}"
+    content = json.dumps({"full_stack": True})
+    sig = signing_key.sign(hashlib.sha256(content.encode()).hexdigest().encode())
+    attestation = b"MOCK-SEV-SNP-REPORT-" + os.urandom(48)
+    receipt = c.issue_receipt(etype, "attested-agent", content, source_id="tee",
+        writer_signature=sig,
+        signer_key_reference=verifying_key.to_ascii(encoding="hex").decode(),
+        attestation_report=attestation,
+        input_hash=hashlib.sha256(content.encode()).hexdigest())
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid
+    assert v.writer_signature == sig, "Layer 2: signature"
+    assert v.signer_key_reference, "Layer 2: key ref"
+    assert v.attestation_report == attestation, "Layer 3: attestation"
+    assert v.input_hash, "input_hash present"
+
+@test("L20.13", "Attestation without signature (standalone TEE proof)")
+def test_l20_13(c):
+    etype = f"test.l20.attestonly.{uuid.uuid4().hex[:8]}"
+    attestation = b"STANDALONE-ATTESTATION-" + os.urandom(32)
+    receipt = c.issue_receipt(etype, "tee-only", json.dumps({"tee": True}),
+        source_id="enclave", attestation_report=attestation)
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid
+    assert v.writer_signature == b"", "No signature"
+    assert v.attestation_report == attestation, "Attestation present without sig"
+
+
+# ─── L21: Signature & Attestation Red Team ───────────────
+
+@test("L21.01", "Signature replay: copy sig from one entry to another")
+def test_l21_01(c):
+    import ed25519
+    key, vk = ed25519.create_keypair()
+    etype = f"test.l21.replay.{uuid.uuid4().hex[:8]}"
+    content1 = json.dumps({"entry": "first"})
+    content2 = json.dumps({"entry": "second"})
+    h1 = hashlib.sha256(content1.encode()).hexdigest()
+    sig1 = key.sign(h1.encode())
+    # Write first entry with valid sig
+    c.issue_receipt(etype, "bob", content1, source_id="test",
+        writer_signature=sig1, signer_key_reference=vk.to_ascii(encoding="hex").decode())
+    # Replay sig1 on a different entry
+    r2 = c.issue_receipt(f"{etype}.replay", "alice", content2, source_id="test",
+        writer_signature=sig1, signer_key_reference=vk.to_ascii(encoding="hex").decode())
+    # Ledger stores it (no verification at write). Verifier detects:
+    h2 = hashlib.sha256(content2.encode()).hexdigest()
+    try:
+        vk.verify(sig1, h2.encode())
+        assert False, "Replayed sig should NOT verify against different content hash"
+    except ed25519.BadSignatureError:
+        pass
+
+@test("L21.05", "Signature flood: 100 signed receipts from 5 threads")
+def test_l21_05(c):
+    import threading
+    etype_base = f"test.l21.flood.{uuid.uuid4().hex[:8]}"
+    success = [0]
+    lock = threading.Lock()
+
+    def writer(idx):
+        try:
+            sig = os.urandom(64)  # mock sig
+            for i in range(20):
+                c.issue_receipt(f"{etype_base}.t{idx}", f"agent-{idx}",
+                    json.dumps({"i": i}), source_id="flood",
+                    writer_signature=sig, signer_key_reference=f"key-{idx}")
+                with lock:
+                    success[0] += 1
+        except Exception:
+            pass
+
+    threads = [threading.Thread(target=writer, args=(i,)) for i in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+    assert success[0] >= 80, f"Expected 80+ signed receipts, got {success[0]}"
+
+@test("L21.08", "SQL injection via signer_key_reference blocked")
+def test_l21_08(c):
+    etype = f"test.l21.sqlinj.{uuid.uuid4().hex[:8]}"
+    malicious = "'; DROP TABLE are_ledger.ledger_entries; --"
+    receipt = c.issue_receipt(etype, "agent", json.dumps({"test": True}),
+        source_id="test", writer_signature=b"sig",
+        signer_key_reference=malicious)
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid
+    assert v.signer_key_reference == malicious, "Stored literally"
+    all_entries = c.query()
+    assert len(all_entries) > 0, "Table still exists"
+
+@test("L21.09", "Null bytes in signature handled safely")
+def test_l21_09(c):
+    etype = f"test.l21.nullsig.{uuid.uuid4().hex[:8]}"
+    sig_with_nulls = b"\x00\x01\x02\x00\x03\x04\x00"
+    receipt = c.issue_receipt(etype, "agent", json.dumps({"test": True}),
+        source_id="test", writer_signature=sig_with_nulls)
+    v = c.verify_proof(receipt.entry_hash, etype)
+    assert v.valid
+    assert v.writer_signature == sig_with_nulls, "Signature with null bytes not preserved"
+
+@test("L21.10", "Mixed signed + unsigned entries in same chain verify")
+def test_l21_10(c):
+    etype = f"test.l21.mixed.{uuid.uuid4().hex[:8]}"
+    c.issue_receipt(etype, "agent", json.dumps({"seq": 1}), source_id="test")
+    c.issue_receipt(etype, "agent", json.dumps({"seq": 2}), source_id="test",
+        writer_signature=b"sig-bytes", signer_key_reference="key-1")
+    c.issue_receipt(etype, "agent", json.dumps({"seq": 3}), source_id="test")
+    c.issue_receipt(etype, "agent", json.dumps({"seq": 4}), source_id="test",
+        writer_signature=b"sig-bytes-2", signer_key_reference="key-2",
+        attestation_report=b"attest-report")
+    v = c.verify_chain(etype)
+    assert v.chain_valid, "Mixed signed/unsigned chain should verify"
+    assert v.entries_checked == 4
+
+
 LIVE_TESTS = [
     test_l9_01, test_l9_02, test_l9_03, test_l9_04, test_l9_05,
     test_l13_01, test_l13_02, test_l13_03, test_l13_04, test_l13_05,
@@ -1940,6 +2176,9 @@ LIVE_TESTS = [
     test_l19_01, test_l19_02, test_l19_03, test_l19_04, test_l19_05,
     test_l19_06, test_l19_07, test_l19_08, test_l19_09, test_l19_10,
     test_l19_11,
+    test_l20_01, test_l20_02, test_l20_03, test_l20_04, test_l20_05,
+    test_l20_06, test_l20_10, test_l20_11, test_l20_12, test_l20_13,
+    test_l21_01, test_l21_05, test_l21_08, test_l21_09, test_l21_10,
 ]
 
 
