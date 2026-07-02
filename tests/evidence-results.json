@@ -1,10 +1,856 @@
 {
-  "timestamp": 1782969943192,
+  "timestamp": 1782970450182,
   "endpoint": "localhost:19292",
-  "total": 5,
-  "green": 5,
+  "total": 146,
+  "green": 146,
   "red": 0,
   "results": [
+    {
+      "id": "L1.01",
+      "desc": "WriteEntry stores entry and returns hash",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.02",
+      "desc": "Same idempotency_key returns same entry_id",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.03",
+      "desc": "Same idempotency_key with different body returns error",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.04",
+      "desc": "GetEntry retrieves written entry with all fields",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.05",
+      "desc": "Consecutive writes produce incrementing chain_position",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.06",
+      "desc": "Hash is deterministic (same input produces same hash)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.07",
+      "desc": "Chain linkage: previous_hash is included in entry_hash",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.08",
+      "desc": "First entry uses genesis hash",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.09",
+      "desc": "Database rejects UPDATE on ledger_entries",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.10",
+      "desc": "Database rejects DELETE on ledger_entries",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L1.11",
+      "desc": "Service verifies DB permissions at startup",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L2.01",
+      "desc": "VerifyEntry on valid entry returns both valid",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L2.02",
+      "desc": "VerifyEntry detects tampered content",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L2.03",
+      "desc": "VerifyChain on valid chain returns chain_valid=true",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L2.05",
+      "desc": "VerifyChain reports accurate entries_checked count",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L2.06",
+      "desc": "GetChainTip returns latest entry",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L2.07",
+      "desc": "VerifyChain on empty/nonexistent chain",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L3.01",
+      "desc": "QueryEntries by agent_id returns only that agent",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L3.02",
+      "desc": "QueryEntries by correlation_id returns entries from multiple sources",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L3.03",
+      "desc": "QueryEntries by source_id returns only that source",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L3.04",
+      "desc": "QueryEntries by entry_type prefix returns matching entries",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L3.05",
+      "desc": "QueryEntries with time range filters correctly",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L3.06",
+      "desc": "QueryEntries pagination returns all entries across pages",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L3.07",
+      "desc": "Multiple sources write concurrently without corruption",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L4.01",
+      "desc": "Three different agent_id formats coexist",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L4.02",
+      "desc": "Query by one agent_id does not return others",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L4.03",
+      "desc": "Same correlation_id links entries with different agent_ids",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.01",
+      "desc": "Valid OCSF JSONL line produces ledger entry",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.02",
+      "desc": "class_uid 4001 maps to openshell.network_activity",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.03",
+      "desc": "class_uid 4002 maps to openshell.http_activity",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.04",
+      "desc": "metadata.uid extracted as agent_id",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.05",
+      "desc": "unmapped.request_id extracted as correlation_id",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.06",
+      "desc": "Raw OCSF JSON preserved as content bytes",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.07",
+      "desc": "Malformed JSON line skipped without crash",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.08",
+      "desc": "Non-OCSF JSON line skipped",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L5.09",
+      "desc": "Adapter processes multiple lines via process_line",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.01",
+      "desc": "Valid OTLP span produces correct entry_type",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.02",
+      "desc": "Span name tools/call maps correctly",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.03",
+      "desc": "Span name llm.request maps correctly",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.04",
+      "desc": "resource.attributes.service.name extracted as agent_id",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.05",
+      "desc": "traceId extracted as correlation_id",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.06",
+      "desc": "OTLP resourceSpans envelope parsed correctly",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.07",
+      "desc": "Flat span JSON parsed correctly",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L6.08",
+      "desc": "Malformed JSON skipped without crash",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L8.01",
+      "desc": "Sample data loads 11 entries across 3 sources",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L8.02",
+      "desc": "trace-aaa correlates Kagenti + OpenShell",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L8.03",
+      "desc": "trace-bbb correlates tool call + network deny",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L8.04",
+      "desc": "Drift detection finds authorization gap for denied request",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L8.05",
+      "desc": "Three independent chains verify clean after sample load",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L8.06",
+      "desc": "Standalone agent chain is independent",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L10.01",
+      "desc": "Concurrent multi-source writes maintain chain integrity",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L10.02",
+      "desc": "Chain integrity violation detected on hash mismatch",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L10.03",
+      "desc": "Large content (up to 1 MiB) accepted",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L10.04",
+      "desc": "Oversized content rejected",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L10.05",
+      "desc": "Chains survive ledger restart",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.01",
+      "desc": "Chain tip tampering: next write recovers or fails safely",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.02",
+      "desc": "Outbox modification doesn't affect chain integrity",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.03",
+      "desc": "SQL injection via entry_type field blocked",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.04",
+      "desc": "SQL injection via agent_id field blocked",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.05",
+      "desc": "Null bytes in content handled safely",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.06",
+      "desc": "Unicode in all string fields handled correctly",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.07",
+      "desc": "Empty required fields rejected",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.08",
+      "desc": "Health endpoint doesn't leak sensitive data",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.09",
+      "desc": "Direct DB INSERT requires correct hash (no service bypass)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L11.10",
+      "desc": "Metrics endpoint doesn't leak entry content",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.01",
+      "desc": "Write flood doesn't crash service (1000 writes across 10 chains)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.02",
+      "desc": "Query flood doesn't crash service (50 sequential queries)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.03",
+      "desc": "Large payload flood (50 x 500KB)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.05",
+      "desc": "Forged entry detected by VerifyChain",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.06",
+      "desc": "Entry deletion detected by VerifyChain",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.07",
+      "desc": "Duplicate chain_position rejected by DB constraint",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.08",
+      "desc": "Cross-chain contamination impossible",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L12.10",
+      "desc": "Default credentials documented",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L14.01",
+      "desc": "Model promotion lifecycle across 3 systems",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L14.02",
+      "desc": "5-agent concurrent session (50 entries)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L14.03",
+      "desc": "Long chain stress (200 entries)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L14.05",
+      "desc": "Cross-system timeline reconstruction (50 events, 5 sources)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L9.01",
+      "desc": "OpenShell sandbox OCSF events flow through adapter to ledger",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L9.02",
+      "desc": "OpenShell allow event exists in ledger",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L9.03",
+      "desc": "OpenShell deny event exists in ledger",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L9.04",
+      "desc": "Kagenti OTEL entries exist in ledger",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L9.05",
+      "desc": "Live cross-system correlation with real trace IDs",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L13.01",
+      "desc": "Kagenti OTEL collector is running and healthy",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L13.02",
+      "desc": "Agent deployment produced OTEL traces in collector",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L13.03",
+      "desc": "Live OTEL spans written to ledger via adapter",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L13.04",
+      "desc": "Real traceIds preserved as correlation_id",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L13.05",
+      "desc": "Kagenti chains verify independently",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L15.01",
+      "desc": "OpenShell + Kagenti events coexist in ledger",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L15.02",
+      "desc": "Same trace ID returns entries from both sources",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L15.03",
+      "desc": "Timeline shows chronological interleaving from both sources",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L15.04",
+      "desc": "Independent chain verification across both live sources",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L15.05",
+      "desc": "Drift detection works across live sources",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L16.01",
+      "desc": "IssueReceipt returns compact ProofReceipt",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L16.02",
+      "desc": "VerifyProof with valid hash returns valid=true",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L16.03",
+      "desc": "VerifyProof with unknown hash returns not found",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L16.04",
+      "desc": "VerifyProof with tampered entry returns invalid",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L16.05",
+      "desc": "Receipt round-trip: issue \u2192 encode \u2192 decode \u2192 verify",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L16.06",
+      "desc": "Multiple receipts for same correlation_id form chain of trust",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L16.07",
+      "desc": "Receipt from one source verifiable by another",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.01",
+      "desc": "Forged receipt hash rejected \u2014 can't fabricate proof",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.02",
+      "desc": "Receipt for wrong entry_type rejected \u2014 can't cross-type verify",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.03",
+      "desc": "Replayed old receipt detected via timestamp staleness",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.04",
+      "desc": "Receipt content swap detected \u2014 change content, hash still finds original",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.05",
+      "desc": "Receipt agent_id swap detected \u2014 can't claim different issuer",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.06",
+      "desc": "Receipt correlation_id swap detected \u2014 can't rebind to different request",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.07",
+      "desc": "Duplicate receipt issuance with same idempotency_key returns same receipt",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.08",
+      "desc": "Receipt with conflicting idempotency_key rejected",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.09",
+      "desc": "Empty receipt fields rejected",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.10",
+      "desc": "Verify with empty hash/type rejected",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.11",
+      "desc": "Receipt SQL injection via entry_type blocked",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L17.12",
+      "desc": "Receipt flood doesn't crash service",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L18.01",
+      "desc": "VerifyProof returns source_id, correlation_id, content_type",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L18.02",
+      "desc": "GetEntryByHash retrieves full entry content",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L18.03",
+      "desc": "GetEntryByHash with wrong type returns not found",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L18.04",
+      "desc": "Downstream can verify + read content in two calls",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L18.05",
+      "desc": "IssueReceipt returns correct entry_type (bug fix)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L18.06",
+      "desc": "IssueReceipt with input_hash: verifier sees matching hash",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L18.07",
+      "desc": "Payload transformation detected via input_hash mismatch",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L18.08",
+      "desc": "input_hash tampering breaks verification",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L18.09",
+      "desc": "input_hash is optional: receipts without it still work",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L19.01",
+      "desc": "CPEX allow decision: issue receipt with policy context",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L19.02",
+      "desc": "CPEX deny decision: issue receipt with denial reason",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L19.03",
+      "desc": "CPEX session taint: allow \u2192 taint \u2192 deny chain",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L19.04",
+      "desc": "CPEX redaction: input_hash detects pre/post redact payload difference",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L19.05",
+      "desc": "CPEX token delegation: receipt records audience-scoped credential",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L19.06",
+      "desc": "CPEX PII scan deny: receipt records attempted violation",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L19.07",
+      "desc": "CPEX multi-hop: three enforcement points, one correlation, all verifiable",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L19.08",
+      "desc": "CPEX cross-principal isolation: same session, different users, separate receipts",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L19.09",
+      "desc": "CPEX Cedar PDP allow: internal repo access permitted",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L19.10",
+      "desc": "CPEX Cedar PDP deny: external repo access blocked",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L19.11",
+      "desc": "CPEX APL gate short-circuit: deny before PDP runs",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L20.01",
+      "desc": "IssueReceipt with signature: receipt returns sig + key ref",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L20.02",
+      "desc": "VerifyProof returns writer_signature + signer_key_reference",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L20.03",
+      "desc": "GetEntryByHash returns signature fields",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L20.04",
+      "desc": "Unsigned entries still verify (backward compat)",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L20.05",
+      "desc": "Ed25519 sign \u2192 verify round-trip",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L20.06",
+      "desc": "Forged signature stored but detectable",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L20.10",
+      "desc": "SPIFFE-style key reference round-trip",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L20.11",
+      "desc": "Attestation report stored and returned",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L20.12",
+      "desc": "Entry with all three layers: hash + sig + attestation",
+      "status": "GREEN",
+      "detail": ""
+    },
+    {
+      "id": "L20.13",
+      "desc": "Attestation without signature (standalone TEE proof)",
+      "status": "GREEN",
+      "detail": ""
+    },
     {
       "id": "L21.01",
       "desc": "Signature replay: copy sig from one entry to another",
