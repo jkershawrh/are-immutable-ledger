@@ -169,7 +169,7 @@ export function ReceiptFlow() {
               ))}
               <text x={430} y={335} textAnchor="middle" fill="var(--text-secondary)" fontSize={11}
                 fontFamily="var(--font-display)" fontWeight={600}>
-                3 receipts · 3 sources · 1 correlation · all verifiable
+                3 receipts · 3 sources · 1 correlation · hash + signature + attestation
               </text>
             </motion.g>
           )}
@@ -180,13 +180,13 @@ export function ReceiptFlow() {
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
         <div style={{ flex: 1 }}>
           {step === 0 && <StepNarrative title="Request arrives" text="A request enters the agentic pipeline. It will pass through three services. Today, each service re-runs the same guardrail checks independently. With receipts, each check runs once." />}
-          {step === 1 && <StepNarrative title="AuthBridge issues receipt" text="AuthBridge runs the PII scan guardrail. Instead of just allowing the request, it calls IssueReceipt — writing the guardrail result to the ledger and getting back a ProofReceipt with the entry hash." color="var(--cyan)" />}
-          {step === 2 && <StepNarrative title="Receipt returned" text="The ProofReceipt contains the entry_hash, entry_type, chain_position, and timestamp. AuthBridge encodes it as a compact base64 header." color="var(--cyan)" />}
+          {step === 1 && <StepNarrative title="AuthBridge issues receipt" text="AuthBridge runs the PII scan guardrail. Instead of just allowing the request, it calls IssueReceipt — writing the guardrail result to the ledger with an optional writer_signature (signed with its SPIFFE SVID) and input_hash (SHA-256 of the payload it checked)." color="var(--cyan)" />}
+          {step === 2 && <StepNarrative title="Receipt returned" text="The ProofReceipt carries three layers: the entry_hash (chain integrity), the writer_signature + signer_key_reference (who wrote it), and optionally an attestation_report (verified runtime). All encoded as a compact base64 header." color="var(--cyan)" />}
           {step === 3 && <StepNarrative title="Receipt travels with request" text="The X-Proof-Receipt header carries the proof to the next hop. The MCP Gateway receives the request with the receipt attached — no out-of-band communication needed." />}
-          {step === 4 && <StepNarrative title="Gateway verifies, skips re-check" text="The MCP Gateway calls VerifyProof with the hash. The ledger confirms: valid, issued by authbridge-proxy, 0.6ms ago, for this correlation ID. The gateway skips running the PII scan again." color="var(--purple)" />}
+          {step === 4 && <StepNarrative title="Gateway verifies, skips re-check" text="The MCP Gateway calls VerifyProof with the hash. The ledger returns: valid, agent_id, source_id, input_hash, writer_signature, and signer_key_reference. The gateway verifies the signature against AuthBridge's public key, confirms the input_hash matches its payload, and skips the PII scan." color="var(--purple)" />}
           {step === 5 && <StepNarrative title="Gateway adds its own receipt" text="The gateway issues its own receipt for the routing decision, then forwards both receipts to the MCP Server. The request now carries proof of two checks." color="var(--purple)" />}
-          {step === 6 && <StepNarrative title="Server verifies both receipts" text="The MCP Server verifies both receipts in parallel. Two VerifyProof calls, ~0.6ms each. It now knows: PII scan passed (AuthBridge) and routing was approved (Gateway) — without running either check." color="var(--green)" />}
-          {step === 7 && <StepNarrative title="Full chain of trust in the ledger" text="Three receipts from three services, linked by the same correlation ID. Each independently verifiable. Each hash-chained. The auditor can reconstruct the entire decision path from one query." />}
+          {step === 6 && <StepNarrative title="Server verifies both receipts" text="The MCP Server verifies both receipts in parallel. For each: check the hash chain (integrity), verify the writer_signature against the signer's public key (identity), and compare input_hash to its payload (same data). Three layers of trust, two VerifyProof calls, ~0.6ms each." color="var(--green)" />}
+          {step === 7 && <StepNarrative title="Full chain of trust in the ledger" text="Three receipts from three services, linked by the same correlation ID. Each hash-chained (integrity), each optionally signed (identity), each optionally attested (runtime). The auditor queries one correlation ID and gets the full decision path — who checked what, who signed it, and from which verified environment." />}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button onClick={advance} disabled={step >= maxSteps} className="nav-btn" style={{
