@@ -26,7 +26,8 @@ class LedgerClient:
         return method(request)
 
     def write(self, entry_type, agent_id, content, *, content_type="application/json",
-              source_id="", correlation_id="", idempotency_key="", input_hash=""):
+              source_id="", correlation_id="", idempotency_key="", input_hash="",
+              writer_signature=b"", signer_key_reference="", attestation_report=b""):
         if isinstance(content, str):
             content = content.encode("utf-8")
         if not idempotency_key:
@@ -40,6 +41,9 @@ class LedgerClient:
             correlation_id=correlation_id,
             idempotency_key=idempotency_key,
             input_hash=input_hash,
+            writer_signature=writer_signature,
+            signer_key_reference=signer_key_reference,
+            attestation_report=attestation_report,
         )
         return self._call(self.stub.WriteEntry, req)
 
@@ -75,7 +79,8 @@ class LedgerClient:
         return self._call(self.stub.GetChainTip, pb.GetChainTipRequest(entry_type=entry_type))
 
     def issue_receipt(self, entry_type, agent_id, content, *, content_type="application/json",
-                      source_id="", correlation_id="", idempotency_key="", input_hash=""):
+                      source_id="", correlation_id="", idempotency_key="", input_hash="",
+                      writer_signature=b"", signer_key_reference="", attestation_report=b""):
         if isinstance(content, str):
             content = content.encode("utf-8")
         if not idempotency_key:
@@ -85,6 +90,9 @@ class LedgerClient:
             content_type=content_type, source_id=source_id,
             correlation_id=correlation_id, idempotency_key=idempotency_key,
             input_hash=input_hash,
+            writer_signature=writer_signature,
+            signer_key_reference=signer_key_reference,
+            attestation_report=attestation_report,
         )
         return self._call(self.stub.IssueReceipt, req)
 

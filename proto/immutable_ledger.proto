@@ -22,6 +22,9 @@ message WriteEntryRequest {
   string correlation_id = 6;
   string idempotency_key = 7;
   string input_hash = 8;
+  bytes writer_signature = 9;
+  string signer_key_reference = 10;
+  bytes attestation_report = 11;
 }
 
 message WriteEntryResponse {
@@ -86,6 +89,9 @@ message ProofReceipt {
   int64 written_ts = 4;
   string entry_id = 5;
   string input_hash = 6;
+  bytes writer_signature = 7;
+  string signer_key_reference = 8;
+  bytes attestation_report = 9;
 }
 
 message VerifyProofRequest {
@@ -104,6 +110,9 @@ message VerifyProofResponse {
   string correlation_id = 8;
   string content_type = 9;
   string input_hash = 10;
+  bytes writer_signature = 11;
+  string signer_key_reference = 12;
+  bytes attestation_report = 13;
 }
 
 message GetEntryByHashRequest {
@@ -125,5 +134,8 @@ message LedgerEntry {
   int64 written_ts = 11;
   string idempotency_key = 12;
   string input_hash = 13;
+  bytes writer_signature = 14;
+  string signer_key_reference = 15;
+  bytes attestation_report = 16;
 }
 

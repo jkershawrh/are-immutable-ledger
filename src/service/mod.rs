@@ -23,6 +23,9 @@ pub struct WriteEntryInput {
     pub correlation_id: Option<String>,
     pub idempotency_key: Option<String>,
     pub input_hash: Option<String>,
+    pub writer_signature: Option<Vec<u8>>,
+    pub signer_key_reference: Option<String>,
+    pub attestation_report: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone)]
@@ -57,6 +60,9 @@ pub struct ProofReceiptOutput {
     pub written_ts_ms: i64,
     pub entry_id: Uuid,
     pub input_hash: String,
+    pub writer_signature: Vec<u8>,
+    pub signer_key_reference: String,
+    pub attestation_report: Vec<u8>,
 }
 
 #[derive(Debug, Clone)]
@@ -71,6 +77,9 @@ pub struct VerifyProofOutput {
     pub correlation_id: String,
     pub content_type: String,
     pub input_hash: String,
+    pub writer_signature: Vec<u8>,
+    pub signer_key_reference: String,
+    pub attestation_report: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -236,6 +245,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
                     correlation_id: input.correlation_id.clone(),
                     idempotency_key: input.idempotency_key.clone(),
                     input_hash: input.input_hash.clone(),
+                    writer_signature: input.writer_signature.clone(),
+                    signer_key_reference: input.signer_key_reference.clone(),
+                    attestation_report: input.attestation_report.clone(),
                     previous_hash,
                     written_ts,
                 })
@@ -507,6 +519,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
     ) -> Result<ProofReceiptOutput, ServiceError> {
         let entry_type = input.entry_type.clone();
         let input_hash = input.input_hash.clone().unwrap_or_default();
+        let writer_signature = input.writer_signature.clone().unwrap_or_default();
+        let signer_key_reference = input.signer_key_reference.clone().unwrap_or_default();
+        let attestation_report = input.attestation_report.clone().unwrap_or_default();
         let write = self.write_entry(input).await?;
         Ok(ProofReceiptOutput {
             entry_hash: write.entry_hash,
@@ -515,6 +530,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
             written_ts_ms: write.written_ts_ms,
             entry_id: write.entry_id,
             input_hash,
+            writer_signature,
+            signer_key_reference,
+            attestation_report,
         })
     }
 
@@ -560,6 +578,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
             correlation_id: entry.correlation_id.unwrap_or_default(),
             content_type: entry.content_type,
             input_hash: entry.input_hash.unwrap_or_default(),
+            writer_signature: entry.writer_signature.unwrap_or_default(),
+            signer_key_reference: entry.signer_key_reference.unwrap_or_default(),
+            attestation_report: entry.attestation_report.unwrap_or_default(),
         })
     }
 }

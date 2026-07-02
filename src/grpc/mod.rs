@@ -44,6 +44,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
                 correlation_id: empty_to_none(input.correlation_id),
                 idempotency_key: empty_to_none(input.idempotency_key),
                 input_hash: empty_to_none(input.input_hash),
+                writer_signature: if input.writer_signature.is_empty() { None } else { Some(input.writer_signature) },
+                signer_key_reference: empty_to_none(input.signer_key_reference),
+                attestation_report: if input.attestation_report.is_empty() { None } else { Some(input.attestation_report) },
             })
             .await
             .map_err(map_err)?;
@@ -76,6 +79,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
                 written_ts: entry.written_ts.timestamp_millis(),
                 idempotency_key: entry.idempotency_key.unwrap_or_default(),
                 input_hash: entry.input_hash.unwrap_or_default(),
+                writer_signature: entry.writer_signature.unwrap_or_default(),
+                signer_key_reference: entry.signer_key_reference.unwrap_or_default(),
+                attestation_report: entry.attestation_report.unwrap_or_default(),
             }),
         }))
     }
@@ -124,6 +130,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
                     written_ts: entry.written_ts.timestamp_millis(),
                     idempotency_key: entry.idempotency_key.unwrap_or_default(),
                 input_hash: entry.input_hash.unwrap_or_default(),
+                writer_signature: entry.writer_signature.unwrap_or_default(),
+                signer_key_reference: entry.signer_key_reference.unwrap_or_default(),
+                attestation_report: entry.attestation_report.unwrap_or_default(),
                 })
                 .collect(),
             next_page_token: next_token.unwrap_or_default(),
@@ -228,6 +237,21 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
             } else {
                 Some(input.input_hash.clone())
             },
+            writer_signature: if input.writer_signature.is_empty() {
+                None
+            } else {
+                Some(input.writer_signature.clone())
+            },
+            signer_key_reference: if input.signer_key_reference.is_empty() {
+                None
+            } else {
+                Some(input.signer_key_reference.clone())
+            },
+            attestation_report: if input.attestation_report.is_empty() {
+                None
+            } else {
+                Some(input.attestation_report.clone())
+            },
         };
         let receipt = self.service.issue_receipt(write_input).await.map_err(map_err)?;
         Ok(Response::new(pb::ProofReceipt {
@@ -237,6 +261,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
             written_ts: receipt.written_ts_ms,
             entry_id: receipt.entry_id.to_string(),
             input_hash: receipt.input_hash,
+            writer_signature: receipt.writer_signature,
+            signer_key_reference: receipt.signer_key_reference,
+            attestation_report: receipt.attestation_report,
         }))
     }
 
@@ -268,6 +295,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
                 written_ts: entry.written_ts.timestamp_millis(),
                 idempotency_key: entry.idempotency_key.unwrap_or_default(),
                 input_hash: entry.input_hash.unwrap_or_default(),
+                writer_signature: entry.writer_signature.unwrap_or_default(),
+                signer_key_reference: entry.signer_key_reference.unwrap_or_default(),
+                attestation_report: entry.attestation_report.unwrap_or_default(),
             }),
         }))
     }
@@ -296,6 +326,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static>
             correlation_id: output.correlation_id,
             content_type: output.content_type,
             input_hash: output.input_hash,
+            writer_signature: output.writer_signature,
+            signer_key_reference: output.signer_key_reference,
+            attestation_report: output.attestation_report,
         }))
     }
 }
