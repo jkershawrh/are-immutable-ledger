@@ -141,3 +141,11 @@ code, pre, .mono { font-family: var(--font-mono); }
 
 .hash { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
 .timestamp { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
+
+/* React Flow dark theme overrides */
+.react-flow__background { background: var(--bg-dark) !important; }
+.react-flow__controls button { background: var(--surface-2) !important; border-color: var(--border) !important; color: var(--text-secondary) !important; }
+.react-flow__controls button:hover { background: var(--surface-3) !important; }
+.react-flow__minimap { background: var(--surface-1) !important; border: 1px solid var(--border) !important; border-radius: 8px !important; }
+.react-flow__edge-text { fill: var(--text-dim) !important; font-family: var(--font-mono) !important; font-size: 9px !important; }
+.react-flow__node { cursor: pointer; }

@@ -8,6 +8,7 @@ import { VerifyView } from './components/VerifyView'
 import { DriftView } from './components/DriftView'
 import { ReceiptFlow } from './components/ReceiptFlow'
 import { StatsBar } from './components/StatsBar'
+import { ExplorerLayout } from './views/ExplorerLayout'
 import { useFetch } from './hooks/useLedger'
 import { api } from './api/ledgerApi'
 
@@ -26,9 +27,11 @@ const NEXT_LABELS: Record<Act, string> = {
 }
 
 export default function App() {
-  const [started, setStarted] = useState(false)
+  const [mode, setMode] = useState<'hero' | 'tour' | 'explorer'>('hero')
   const [actIndex, setActIndex] = useState(0)
   const { data: summary } = useFetch(() => api.summary(), [])
+
+  if (mode === 'explorer') return <ExplorerLayout />
 
   const currentAct = ACTS[actIndex]
   const nextLabel = NEXT_LABELS[currentAct]
@@ -36,10 +39,9 @@ export default function App() {
   const goNext = () => { if (actIndex < ACTS.length - 1) setActIndex(actIndex + 1) }
   const goBack = () => { if (actIndex > 0) setActIndex(actIndex - 1) }
 
-  if (!started) {
+  if (mode === 'hero') {
     return (
       <div
-        onClick={() => setStarted(true)}
         style={{
           height: '100vh', display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
@@ -74,11 +76,26 @@ export default function App() {
           proof chain · runtime trust infrastructure
         </motion.div>
         <motion.div
-          animate={{ opacity: [0.3, 0.7, 0.3] }}
-          transition={{ repeat: Infinity, duration: 2.5 }}
-          style={{ fontSize: 12, color: 'var(--text-disabled)' }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.2, duration: 0.8 }}
+          style={{ display: 'flex', gap: 16, marginTop: 8 }}
         >
-          click to begin
+          <button onClick={() => setMode('explorer')} style={{
+            padding: '10px 28px', borderRadius: 8, border: 'none', cursor: 'pointer',
+            background: 'linear-gradient(135deg, var(--blue), var(--purple))',
+            color: '#fff', fontWeight: 700, fontSize: 14, fontFamily: 'var(--font-display)',
+          }}>
+            Explore
+          </button>
+          <button onClick={() => setMode('tour')} style={{
+            padding: '10px 28px', borderRadius: 8, cursor: 'pointer',
+            border: '1px solid var(--border)', background: 'transparent',
+            color: 'var(--text-secondary)', fontWeight: 600, fontSize: 14,
+            fontFamily: 'var(--font-display)',
+          }}>
+            Take the Tour
+          </button>
         </motion.div>
       </div>
     )
