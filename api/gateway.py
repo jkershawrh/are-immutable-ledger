@@ -72,6 +72,7 @@ def entry_to_dict(e):
         "previous_hash": e.previous_hash,
         "chain_position": e.chain_position,
         "written_ts": e.written_ts,
+        "input_hash": e.input_hash,
         "writer_signature": e.writer_signature.hex() if e.writer_signature else "",
         "signer_key_reference": e.signer_key_reference if hasattr(e, 'signer_key_reference') else "",
         "attestation_report": e.attestation_report.hex() if e.attestation_report else "",
@@ -195,6 +196,14 @@ def get_entries():
         val = request.args.get(key, "")
         if val:
             kwargs[key] = val
+    for key in ("from_ts", "to_ts"):
+        val = request.args.get(key, "")
+        if val:
+            try:
+                kwargs[key] = int(val)
+            except ValueError:
+                c.close()
+                return jsonify({"error": f"{key} must be Unix milliseconds"}), 400
     entries = c.query(**kwargs)
     c.close()
     return jsonify([entry_to_dict(e) for e in sorted(entries, key=lambda x: x.written_ts)])
