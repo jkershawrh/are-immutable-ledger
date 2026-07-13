@@ -118,6 +118,9 @@ The repository keeps the proof surface close to the code:
 - `tests/EVIDENCE_MATRIX.md` summarizes automated, live, and not-yet-automated coverage.
 - `tests/evidence-results.json` records the latest evidence runner output.
 - `tests/SECURITY_TESTING.md` documents red-team and hardening checks.
+- `contracts/fleet-ecosystem-integration-contract.md` defines the proof-only boundary
+  and canonical API mapping for deepfield-fleet, governed-cognitive-loop, and
+  fleet-llm-d integration.
 - `proof-explorer/proof.py verify --all` independently verifies stored chains through the public API.
 
 Current checked-in evidence shows `146/146` automated checks GREEN. The matrix still keeps design-level/manual items as YELLOW until those checks are automated in `tests/run_evidence.py`.
