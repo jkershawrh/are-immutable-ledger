@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::Utc;
@@ -114,7 +115,7 @@ pub trait EventPublisher: Send + Sync {
         true
     }
 
-    async fn publish(&self, key: &str, payload: &str) -> Result<(), String>;
+    async fn publish(&self, record: &OutboxRecord) -> Result<(), String>;
 }
 
 #[derive(Default, Clone)]
@@ -126,8 +127,70 @@ impl EventPublisher for NoopEventPublisher {
         false
     }
 
-    async fn publish(&self, _key: &str, _payload: &str) -> Result<(), String> {
+    async fn publish(&self, _record: &OutboxRecord) -> Result<(), String> {
         Err("event publisher is not configured".to_string())
+    }
+}
+
+#[derive(Clone)]
+pub struct HttpEventPublisher {
+    client: reqwest::Client,
+    endpoint: Option<reqwest::Url>,
+    bearer_token: Option<String>,
+}
+
+impl HttpEventPublisher {
+    pub fn new(
+        endpoint: Option<String>,
+        bearer_token: Option<String>,
+        timeout: Duration,
+    ) -> Result<Self, String> {
+        let endpoint = endpoint
+            .map(|value| {
+                reqwest::Url::parse(value.trim())
+                    .map_err(|err| format!("invalid outbox HTTP endpoint: {err}"))
+            })
+            .transpose()?;
+        let client = reqwest::Client::builder()
+            .timeout(timeout)
+            .build()
+            .map_err(|err| format!("failed to create outbox HTTP client: {err}"))?;
+        Ok(Self {
+            client,
+            endpoint,
+            bearer_token,
+        })
+    }
+}
+
+#[async_trait]
+impl EventPublisher for HttpEventPublisher {
+    fn is_enabled(&self) -> bool {
+        self.endpoint.is_some()
+    }
+
+    async fn publish(&self, record: &OutboxRecord) -> Result<(), String> {
+        let endpoint = self
+            .endpoint
+            .as_ref()
+            .ok_or_else(|| "event publisher is not configured".to_string())?;
+        let mut request = self
+            .client
+            .post(endpoint.clone())
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .header("Idempotency-Key", record.outbox_id.to_string())
+            .header("X-Ledger-Entry-ID", record.entry_id.to_string())
+            .body(record.payload.clone());
+        if let Some(token) = &self.bearer_token {
+            request = request.bearer_auth(token);
+        }
+        request
+            .send()
+            .await
+            .map_err(|err| format!("outbox HTTP request failed: {err}"))?
+            .error_for_status()
+            .map_err(|err| format!("outbox HTTP endpoint rejected event: {err}"))?;
+        Ok(())
     }
 }
 
@@ -603,7 +666,7 @@ async fn publish_one<R: LedgerRepository, P: EventPublisher>(
     record: OutboxRecord,
 ) -> Result<(), ServiceError> {
     publisher
-        .publish(&record.entry_type, &record.payload)
+        .publish(&record)
         .await
         .map_err(ServiceError::Internal)?;
     repo.mark_outbox_delivered(record.outbox_id)
@@ -655,9 +718,9 @@ mod tests {
             max_content_size_bytes: 1_048_576,
             db_connection_string: "postgres://local/test".to_string(),
             read_replica_connection_string: None,
-            kafka_bootstrap_servers: "localhost:9092".to_string(),
-            kafka_sasl_username: "user".to_string(),
-            kafka_sasl_password: "pass".to_string(),
+            outbox_http_endpoint: None,
+            outbox_http_bearer_token: None,
+            outbox_http_timeout_seconds: 10,
             genesis_hash_input: "ARE_LEDGER_GENESIS".to_string(),
             api_token: None,
             shutdown_token: None,
@@ -675,6 +738,87 @@ mod tests {
     #[test]
     fn noop_event_publisher_reports_disabled() {
         assert!(!NoopEventPublisher.is_enabled());
+    }
+
+    #[test]
+    fn http_event_publisher_requires_a_valid_endpoint() {
+        let publisher = HttpEventPublisher::new(None, None, Duration::from_secs(1))
+            .expect("disabled publisher");
+        assert!(!publisher.is_enabled());
+
+        let error =
+            HttpEventPublisher::new(Some("not a URL".to_string()), None, Duration::from_secs(1))
+                .err()
+                .expect("invalid endpoint must fail");
+        assert!(error.contains("invalid outbox HTTP endpoint"));
+    }
+
+    #[tokio::test]
+    async fn http_event_publisher_sends_idempotent_authenticated_json() {
+        use axum::body::Bytes;
+        use axum::extract::State;
+        use axum::http::HeaderMap;
+        use axum::routing::post;
+        use axum::Router;
+
+        type CapturedRequest = Arc<Mutex<Option<(HeaderMap, Vec<u8>)>>>;
+
+        async fn capture(
+            State(captured): State<CapturedRequest>,
+            headers: HeaderMap,
+            body: Bytes,
+        ) -> axum::http::StatusCode {
+            *captured.lock().await = Some((headers, body.to_vec()));
+            axum::http::StatusCode::CREATED
+        }
+
+        let captured: CapturedRequest = Arc::new(Mutex::new(None));
+        let app = Router::new()
+            .route("/events", post(capture))
+            .with_state(Arc::clone(&captured));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(async move { axum::serve(listener, app).await });
+
+        let record = OutboxRecord {
+            outbox_id: Uuid::new_v4(),
+            entry_id: Uuid::new_v4(),
+            entry_type: "ledger.entry.written".to_string(),
+            payload: r#"{"entry_id":"test"}"#.to_string(),
+            status: crate::repository::OutboxStatus::Pending,
+            attempt_count: 0,
+        };
+        let publisher = HttpEventPublisher::new(
+            Some(format!("http://{address}/events")),
+            Some("secret".to_string()),
+            Duration::from_secs(1),
+        )
+        .expect("publisher");
+
+        publisher.publish(&record).await.expect("publish");
+        let (headers, body) = captured.lock().await.take().expect("captured request");
+        assert_eq!(
+            headers.get("idempotency-key").expect("idempotency header"),
+            record.outbox_id.to_string().as_str()
+        );
+        assert_eq!(
+            headers
+                .get("x-ledger-entry-id")
+                .expect("ledger entry header"),
+            record.entry_id.to_string().as_str()
+        );
+        assert_eq!(
+            headers.get("authorization").expect("authorization"),
+            "Bearer secret"
+        );
+        assert_eq!(
+            headers.get("content-type").expect("content type"),
+            "application/json"
+        );
+        assert_eq!(body, record.payload.as_bytes());
+        server.abort();
     }
 
     #[tokio::test]
