@@ -140,7 +140,7 @@ The service exposes Prometheus metrics at `/metrics` on `ARE_LEDGER_METRICS_PORT
 - `are_ledger_chain_verify_failure_total`
 - `are_outbox_publish_failure_total`
 
-The standalone binary stores outbox rows but wires a disabled/no-op publisher by default; without a real publisher implementation, outbox rows remain `PENDING` instead of being marked delivered. Treat Kafka configuration in the demo as a placeholder until an external publisher is wired.
+The standalone binary can deliver committed outbox events to an HTTP event sink. Set `ARE_LEDGER_OUTBOX_HTTP_ENDPOINT` to enable delivery, optionally set `ARE_LEDGER_OUTBOX_HTTP_BEARER_TOKEN`, and use `ARE_LEDGER_OUTBOX_HTTP_TIMEOUT_SECONDS` to override the 10-second request timeout. Each request contains the stored JSON payload plus `Idempotency-Key` (the outbox ID) and `X-Ledger-Entry-ID` headers. Successful 2xx responses mark the row `DELIVERED`; transport errors and non-2xx responses leave it `PENDING` for retry. Consumers must deduplicate by `Idempotency-Key` because delivery is at least once. When the endpoint is unset, publishing is disabled and rows remain `PENDING`.
 
 Hash compatibility note: this pre-release standalone ledger uses the V2 canonical proof envelope as its initial public contract. No production data has been written with the earlier experimental hash shape; if you have local demo data from before V2, reload it.
 

@@ -10,9 +10,9 @@ pub struct AppConfig {
     pub max_content_size_bytes: usize,
     pub db_connection_string: String,
     pub read_replica_connection_string: Option<String>,
-    pub kafka_bootstrap_servers: String,
-    pub kafka_sasl_username: String,
-    pub kafka_sasl_password: String,
+    pub outbox_http_endpoint: Option<String>,
+    pub outbox_http_bearer_token: Option<String>,
+    pub outbox_http_timeout_seconds: u64,
     pub genesis_hash_input: String,
     pub api_token: Option<String>,
     pub shutdown_token: Option<String>,
@@ -36,9 +36,12 @@ impl AppConfig {
             db_connection_string: required("ARE_LEDGER_DB_CONNECTION_STRING")?,
             read_replica_connection_string: env::var("ARE_LEDGER_READ_REPLICA_CONNECTION_STRING")
                 .ok(),
-            kafka_bootstrap_servers: required("ARE_LEDGER_KAFKA_BOOTSTRAP_SERVERS")?,
-            kafka_sasl_username: required("ARE_LEDGER_KAFKA_SASL_USERNAME")?,
-            kafka_sasl_password: required("ARE_LEDGER_KAFKA_SASL_PASSWORD")?,
+            outbox_http_endpoint: optional("ARE_LEDGER_OUTBOX_HTTP_ENDPOINT"),
+            outbox_http_bearer_token: optional("ARE_LEDGER_OUTBOX_HTTP_BEARER_TOKEN"),
+            outbox_http_timeout_seconds: parse_nonzero_u64(
+                "ARE_LEDGER_OUTBOX_HTTP_TIMEOUT_SECONDS",
+                10,
+            )?,
             genesis_hash_input: env::var("ARE_LEDGER_GENESIS_HASH_INPUT")
                 .unwrap_or_else(|_| "ARE_LEDGER_GENESIS".to_string()),
             api_token: env::var("ARE_LEDGER_API_TOKEN").ok(),
@@ -49,6 +52,10 @@ impl AppConfig {
 
 fn required(name: &str) -> Result<String, ConfigError> {
     env::var(name).map_err(|_| ConfigError::Missing(name.to_string()))
+}
+
+fn optional(name: &str) -> Option<String> {
+    env::var(name).ok().filter(|value| !value.trim().is_empty())
 }
 
 fn parse_u16(name: &str, default: u16) -> Result<u16, ConfigError> {
@@ -69,6 +76,19 @@ fn parse_usize(name: &str, default: usize) -> Result<usize, ConfigError> {
     }
 }
 
+fn parse_nonzero_u64(name: &str, default: u64) -> Result<u64, ConfigError> {
+    let value = match env::var(name) {
+        Ok(raw) => raw
+            .parse::<u64>()
+            .map_err(|_| ConfigError::InvalidInteger(name.to_string()))?,
+        Err(_) => default,
+    };
+    if value == 0 {
+        return Err(ConfigError::InvalidInteger(name.to_string()));
+    }
+    Ok(value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,9 +107,9 @@ mod tests {
             "ARE_LEDGER_MAX_CONTENT_SIZE_BYTES",
             "ARE_LEDGER_DB_CONNECTION_STRING",
             "ARE_LEDGER_READ_REPLICA_CONNECTION_STRING",
-            "ARE_LEDGER_KAFKA_BOOTSTRAP_SERVERS",
-            "ARE_LEDGER_KAFKA_SASL_USERNAME",
-            "ARE_LEDGER_KAFKA_SASL_PASSWORD",
+            "ARE_LEDGER_OUTBOX_HTTP_ENDPOINT",
+            "ARE_LEDGER_OUTBOX_HTTP_BEARER_TOKEN",
+            "ARE_LEDGER_OUTBOX_HTTP_TIMEOUT_SECONDS",
             "ARE_LEDGER_GENESIS_HASH_INPUT",
             "ARE_LEDGER_API_TOKEN",
             "ARE_LEDGER_SHUTDOWN_TOKEN",
@@ -104,24 +124,20 @@ mod tests {
         let _guard = env_lock();
         clear();
         std::env::set_var("ARE_LEDGER_DB_CONNECTION_STRING", "postgres://db");
-        std::env::set_var("ARE_LEDGER_KAFKA_BOOTSTRAP_SERVERS", "kafka:9092");
-        std::env::set_var("ARE_LEDGER_KAFKA_SASL_USERNAME", "user");
-        std::env::set_var("ARE_LEDGER_KAFKA_SASL_PASSWORD", "pass");
         let cfg = AppConfig::from_env().expect("config");
         assert_eq!(cfg.grpc_port, 9092);
         assert_eq!(cfg.health_port, 8080);
         assert_eq!(cfg.metrics_port, 8083);
         assert_eq!(cfg.max_content_size_bytes, 1_048_576);
         assert_eq!(cfg.genesis_hash_input, "ARE_LEDGER_GENESIS");
+        assert_eq!(cfg.outbox_http_timeout_seconds, 10);
+        assert!(cfg.outbox_http_endpoint.is_none());
     }
 
     #[test]
     fn missing_required_variable_fails() {
         let _guard = env_lock();
         clear();
-        std::env::set_var("ARE_LEDGER_KAFKA_BOOTSTRAP_SERVERS", "kafka:9092");
-        std::env::set_var("ARE_LEDGER_KAFKA_SASL_USERNAME", "user");
-        std::env::set_var("ARE_LEDGER_KAFKA_SASL_PASSWORD", "pass");
         let err = AppConfig::from_env().expect_err("must fail");
         assert!(matches!(err, ConfigError::Missing(_)));
     }
@@ -131,10 +147,17 @@ mod tests {
         let _guard = env_lock();
         clear();
         std::env::set_var("ARE_LEDGER_DB_CONNECTION_STRING", "postgres://db");
-        std::env::set_var("ARE_LEDGER_KAFKA_BOOTSTRAP_SERVERS", "kafka:9092");
-        std::env::set_var("ARE_LEDGER_KAFKA_SASL_USERNAME", "user");
-        std::env::set_var("ARE_LEDGER_KAFKA_SASL_PASSWORD", "pass");
         std::env::set_var("ARE_LEDGER_GRPC_PORT", "not-a-number");
+        let err = AppConfig::from_env().expect_err("must fail");
+        assert!(matches!(err, ConfigError::InvalidInteger(_)));
+    }
+
+    #[test]
+    fn rejects_zero_outbox_timeout() {
+        let _guard = env_lock();
+        clear();
+        std::env::set_var("ARE_LEDGER_DB_CONNECTION_STRING", "postgres://db");
+        std::env::set_var("ARE_LEDGER_OUTBOX_HTTP_TIMEOUT_SECONDS", "0");
         let err = AppConfig::from_env().expect_err("must fail");
         assert!(matches!(err, ConfigError::InvalidInteger(_)));
     }

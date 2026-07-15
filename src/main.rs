@@ -2,6 +2,7 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
 use axum::{
@@ -20,7 +21,7 @@ use are_immutable_ledger::grpc::pb::immutable_ledger_service_server::ImmutableLe
 use are_immutable_ledger::grpc::ImmutableLedgerGrpc;
 use are_immutable_ledger::metrics;
 use are_immutable_ledger::repository::PostgresLedgerRepository;
-use are_immutable_ledger::service::{ImmutableLedgerService, NoopEventPublisher};
+use are_immutable_ledger::service::{HttpEventPublisher, ImmutableLedgerService};
 use tokio_postgres::NoTls;
 
 #[tokio::main]
@@ -51,7 +52,19 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("postgres connect for ledger repository")?;
     let repo = Arc::new(PostgresLedgerRepository::new(pg));
-    let publisher = Arc::new(NoopEventPublisher);
+    let publisher = Arc::new(
+        HttpEventPublisher::new(
+            config.outbox_http_endpoint.clone(),
+            config.outbox_http_bearer_token.clone(),
+            Duration::from_secs(config.outbox_http_timeout_seconds),
+        )
+        .map_err(anyhow::Error::msg)
+        .context("failed to configure outbox HTTP publisher")?,
+    );
+    info!(
+        outbox_http_enabled = config.outbox_http_endpoint.is_some(),
+        "configured outbox publisher"
+    );
     let service = Arc::new(ImmutableLedgerService::new(repo, publisher, config.clone()));
     let grpc = ImmutableLedgerGrpc::new(service);
 
