@@ -174,7 +174,7 @@ Hash compatibility note: migration 006 labels existing rows as V2 and new rows a
 
 For shared deployments, set `sslmode=require` or `sslmode=verify-full` in `ARE_LEDGER_DB_CONNECTION_STRING` for encrypted Postgres connections (rustls-based, no OpenSSL dependency). Put the gRPC listener behind TLS/mTLS-capable infrastructure and set `ARE_LEDGER_API_TOKEN`; clients can pass the token explicitly or through the same environment variable. Set `ARE_LEDGER_SHUTDOWN_TOKEN` only for controlled graceful-shutdown drills, and call `/shutdownz` with `Authorization: Bearer <token>`.
 
-The Flask REST gateway requires `GATEWAY_API_TOKEN` and will not start without it, because it writes ledger evidence. For local development set `GATEWAY_ALLOW_UNAUTHENTICATED=true` to run it open deliberately. It binds to `127.0.0.1`, runs with debug disabled, and only allows localhost Vite origins unless `GATEWAY_CORS_ORIGINS` is set. `/healthz` is exempt from authentication so container probes do not need the token. Keep it behind TLS/auth-aware infrastructure, and only widen `GATEWAY_HOST` or CORS origins intentionally.
+The REST gateway requires `GATEWAY_API_TOKEN` and will not start without it, because it writes ledger evidence. For local development set `GATEWAY_ALLOW_UNAUTHENTICATED=true` to run it open deliberately. It binds to `127.0.0.1`, runs with debug disabled, and only allows localhost Vite origins unless `GATEWAY_CORS_ORIGINS` is set. `/healthz` is exempt from authentication so container probes do not need the token. Keep it behind TLS/auth-aware infrastructure, and only widen `GATEWAY_HOST` or CORS origins intentionally.
 
 ## Demo: Cross-System Proof
 
@@ -252,7 +252,7 @@ adapters/ocsf/             OpenShell OCSF event bridge
 adapters/otel/             Kagenti/OTEL span bridge
 adapters/mlflow/             MLflow registry webhook listener + artifact/registry wrappers
 proof-explorer/            Query, verify, timeline, and drift CLI
-api/                       REST gateway for frontend (Flask)
+api/                       REST gateway for frontend (FastAPI + uvicorn)
 frontend/                  7-act narrative proof explorer (React + Vite + motion)
 demo/                      Self-contained demo with compose (includes joint CPEX/AuthBridge scenarios)
 scripts/perf/              Latency benchmarks (k6 + Python harness)

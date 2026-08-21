@@ -28,7 +28,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo fmt --all --check
 python tests/run_evidence.py                           # Evidence matrix (146 checks)
 python proof-explorer/proof.py verify --all            # Independent chain verification
-python -m pytest -q tests/test_gateway_contract.py     # Flask gateway contract tests
+python -m pytest -q tests/test_gateway_contract.py     # gateway contract tests
 bash scripts/release-test.sh                           # Full release checklist (requires containers)
 ```
 
@@ -47,7 +47,7 @@ CI: GitHub Actions runs `rust` (fmt, clippy, test) and `gateway` (Python pytest)
 | `src/service/` | Business logic: validation, chain tips, retry, halt/recovery, proof receipts |
 | `src/repository/` | LedgerRepository trait + Postgres (deadpool-postgres, advisory locks) and InMemory impls |
 | `migrations/` | 8 SQL migrations |
-| `api/gateway.py` | Flask REST gateway (proxies to gRPC via Python SDK). This is the one `api/Dockerfile` ships. |
+| `api/gateway.py` | Async FastAPI REST gateway (proxies to gRPC via Python SDK), served by uvicorn. |
 | `frontend/` | React + Vite + TypeScript proof explorer UI (@xyflow/react, zustand) |
 | `sdks/python/` | Python gRPC client SDK |
 | `adapters/ocsf/` | NVIDIA OCSF event bridge |
