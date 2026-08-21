@@ -214,6 +214,7 @@ Thin bridges for existing agentic systems:
 |---------|-------------|-------------|---------------------|
 | `adapters/ocsf/` | NVIDIA OpenShell | OCSF v1.7.0 JSONL | `openshell.*` |
 | `adapters/otel/` | Kagenti / any OTEL system | OTLP JSON spans | `kagenti.*` |
+| `adapters/cpex/` | CPEX policy engine | OCSF 6003 audit events | `cpex.*` |
 | `adapters/mlflow/` | MLflow Registry | Webhook + Plugin | `mlflow.*` |
 | Direct gRPC | Any system | Any bytes | Your namespace |
 
@@ -246,10 +247,11 @@ Each adapter is 100-150 lines of Python. Direct gRPC integration is ~30 lines. T
 proto/                     The universal contract (9 RPCs)
 src/                       Ledger server (Rust, gRPC, PostgreSQL)
 migrations/                Database schema (append-only constraints + hash index)
-contracts/                 Integration contracts (fleet ecosystem, CPEX/AuthBridge/Praxis)
+contracts/                 Integration contracts (fleet ecosystem proof boundary)
 sdks/python/               Python client SDK (WriteEntry, IssueReceipt, VerifyProof, GetEntryByHash)
 adapters/ocsf/             OpenShell OCSF event bridge
 adapters/otel/             Kagenti/OTEL span bridge
+adapters/cpex/             CPEX audit seam consumer with gap detection and writer signatures
 adapters/mlflow/             MLflow registry webhook listener + artifact/registry wrappers
 proof-explorer/            Query, verify, timeline, and drift CLI
 api/                       REST gateway for frontend (FastAPI + uvicorn)

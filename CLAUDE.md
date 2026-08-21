@@ -29,6 +29,7 @@ cargo fmt --all --check
 python tests/run_evidence.py                           # Evidence matrix (146 checks)
 python proof-explorer/proof.py verify --all            # Independent chain verification
 python -m pytest -q tests/test_gateway_contract.py     # gateway contract tests
+python -m pytest -q tests/test_gateway_auth.py         # gateway auth tests
 bash scripts/release-test.sh                           # Full release checklist (requires containers)
 ```
 
@@ -41,7 +42,7 @@ CI: GitHub Actions runs `rust` (fmt, clippy, test) and `gateway` (Python pytest)
 | `proto/immutable_ledger.proto` | gRPC contract: 9 RPCs in are.ledger.v1 package |
 | `src/main.rs` | Entry point: 3 Axum/Tonic servers (gRPC, health, metrics) |
 | `src/config/` | AppConfig from ARE_LEDGER_* env vars |
-| `src/crypto/` | SHA-256 hashing, V2 canonical entry hash, advisory lock keys |
+| `src/crypto/` | SHA-256 hashing, V3 canonical entry hash, advisory lock keys |
 | `src/db_permissions/` | Startup check: role has INSERT+SELECT but NOT UPDATE/DELETE |
 | `src/grpc/` | Tonic gRPC service impl |
 | `src/service/` | Business logic: validation, chain tips, retry, halt/recovery, proof receipts |
@@ -51,6 +52,7 @@ CI: GitHub Actions runs `rust` (fmt, clippy, test) and `gateway` (Python pytest)
 | `frontend/` | React + Vite + TypeScript proof explorer UI (@xyflow/react, zustand) |
 | `sdks/python/` | Python gRPC client SDK |
 | `adapters/ocsf/` | NVIDIA OCSF event bridge |
+| `adapters/cpex/` | CPEX audit seam consumer with gap detection and writer signatures |
 | `adapters/otel/` | Kagenti/OTEL span bridge |
 | `proof-explorer/proof.py` | CLI: verify, query, timeline, drift analysis |
 | `adapters/mlflow/` | MLflow webhook listener + artifact/registry wrappers |
@@ -65,7 +67,7 @@ CI: GitHub Actions runs `rust` (fmt, clippy, test) and `gateway` (Python pytest)
 1. **gRPC layer** (src/grpc/) -- Tonic server, optional bearer-token auth via interceptor
 2. **Service layer** (src/service/) -- Generic over `LedgerRepository` and `EventPublisher`. Chain tip lookup, retry with exponential backoff, chain halt/recovery, idempotency, proof receipt issue/verify, batch chain verification (500)
 3. **Repository layer** (src/repository/) -- `PostgresLedgerRepository` (advisory locks, transactional outbox) and `InMemoryLedgerRepository` (for tests)
-4. **Crypto module** (src/crypto/) -- V2 canonical entry hash with length-delimited fields
+4. **Crypto module** (src/crypto/) -- V3 canonical entry hash with length-delimited fields
 
 **Key patterns:**
 - `#![forbid(unsafe_code)]` at crate root
