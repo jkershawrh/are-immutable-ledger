@@ -10,6 +10,8 @@ import pytest
 # mode explicitly; tests/test_gateway_auth.py covers the auth behaviour itself.
 os.environ.setdefault("GATEWAY_ALLOW_UNAUTHENTICATED", "true")
 
+from fastapi.testclient import TestClient  # noqa: E402
+
 gateway = pytest.importorskip(
     "api.gateway",
     reason="optional REST gateway dependencies are not installed",
@@ -54,7 +56,7 @@ def test_entries_query_forwards_unix_millisecond_window_and_input_hash(monkeypat
     ledger = _FakeClient()
     monkeypatch.setattr(gateway, "get_client", lambda: ledger)
 
-    response = gateway.app.test_client().get(
+    response = TestClient(gateway.app).get(
         "/api/entries?correlation_id=corr-1&from_ts=100&to_ts=200"
     )
 
@@ -67,7 +69,7 @@ def test_entries_query_forwards_unix_millisecond_window_and_input_hash(monkeypat
         "to_ts": 200,
     }
     assert ledger.closed is False  # singleton client is reused, not closed per-request
-    body = response.get_json()
+    body = response.json()
     assert body["entries"][0]["input_hash"] == "c" * 64
     assert body["entries"][0]["hash_version"] == "ARE_LEDGER_ENTRY_HASH_V3"
     assert body["next_page_token"] == "next-page"
@@ -78,7 +80,7 @@ def test_entries_query_rejects_non_integer_time_window(monkeypatch):
     ledger = _FakeClient()
     monkeypatch.setattr(gateway, "get_client", lambda: ledger)
 
-    response = gateway.app.test_client().get("/api/entries?from_ts=not-a-number")
+    response = TestClient(gateway.app).get("/api/entries?from_ts=not-a-number")
 
     assert response.status_code == 400
     assert ledger.query_kwargs is None

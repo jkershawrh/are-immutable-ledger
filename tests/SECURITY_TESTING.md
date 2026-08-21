@@ -27,16 +27,19 @@
 
 ## Attack Surface Coverage
 
-### gRPC API (6 endpoints)
+### gRPC API (9 RPCs)
 
 | Endpoint | Injection Tested | Abuse Tested | Auth |
 |---|---|---|---|
-| WriteEntry | L11.03, L11.04 (SQL), L11.05 (null), L11.06 (unicode), L11.07 (empty fields) | L12.01 (flood), L12.03 (large payload) | None (infrastructure-level) |
-| GetEntry | Via L1.04 | — | None |
-| QueryEntries | Via L3.01-L3.07 | L12.02 (query flood) | None |
-| VerifyEntry | Via L2.01-L2.02 | — | None |
-| VerifyChain | Via L2.03, L12.05, L12.06 | — | None |
-| GetChainTip | Via L2.06 | — | None |
+| WriteEntry | L11.03, L11.04 (SQL), L11.05 (null), L11.06 (unicode), L11.07 (empty fields) | L12.01 (flood), L12.03 (large payload) | Optional bearer token (`ARE_LEDGER_API_TOKEN`) |
+| GetEntry | Via L1.04 | — | Optional bearer token |
+| QueryEntries | Via L3.01-L3.07 | L12.02 (query flood) | Optional bearer token |
+| VerifyEntry | Via L2.01-L2.02 | — | Optional bearer token |
+| VerifyChain | Via L2.03, L12.05, L12.06 | — | Optional bearer token |
+| GetChainTip | Via L2.06 | — | Optional bearer token |
+| IssueReceipt | L17.11 (SQL) | L17.12 (flood) | Optional bearer token |
+| VerifyProof | Via L18.01-L18.04 | — | Optional bearer token |
+| GetEntryByHash | Via L18.03-L18.04 | — | Optional bearer token |
 
 ### Database Layer
 
@@ -136,8 +139,8 @@ These are known limitations, not bugs. They represent design decisions appropria
 
 | Gap | Why It Exists | Mitigation |
 |---|---|---|
-| **No authentication** | Ledger is neutral infrastructure — auth is the deployer's responsibility | Deploy behind mTLS, API gateway, or service mesh |
-| **No encryption in transit** | Demo uses plaintext gRPC | Production deployment adds TLS |
+| **Authentication is opt-in** | gRPC bearer-token auth (`ARE_LEDGER_API_TOKEN`) is available but disabled by default. REST gateway requires `GATEWAY_API_TOKEN` and refuses to start without it (or explicit `GATEWAY_ALLOW_UNAUTHENTICATED=true`). | Enable gRPC auth in production; gateway auth is mandatory by default |
+| **No encryption in transit** | Demo uses plaintext gRPC; Postgres TLS available via `sslmode=require` (rustls) | Production deployment adds TLS for both gRPC and Postgres |
 | **No multi-tenant isolation** | Single-tenant design | Namespace entry_types per tenant |
 | **No rate limiting** | Service-level rate limiting not implemented | Deploy behind API gateway with rate limits |
 | **Static genesis hash** | SHA-256("ARE_LEDGER_GENESIS") is hardcoded | Configurable via `ARE_LEDGER_GENESIS_HASH_INPUT` env var |

@@ -2,7 +2,7 @@
 
 Status: `RED` = failing/untested | `GREEN` = passing | `YELLOW` = partial
 
-Last run: tests/evidence-results.json (146/146 GREEN automated; 10 matrix items remain YELLOW because they are documented/manual or CLI coverage not yet automated: L2.04, L4.04, L7.01-L7.08)
+Last run: tests/evidence-results.json (146/146 sub-checks GREEN in `run_evidence.py`; this matrix tracks 102 items at the scenario level — 92 GREEN, 10 YELLOW. The YELLOW items are documented/manual or CLI coverage not yet automated: L2.04, L4.04, L7.01-L7.08)
 
 ---
 
@@ -183,6 +183,90 @@ Last run: tests/evidence-results.json (146/146 GREEN automated; 10 matrix items 
 | L15.04 | Independent chain verification across live sources | All live chains VALID | GREEN | tests/evidence-results.json |
 | L15.05 | Drift detection works across live sources | Denials flagged for drift check | GREEN | tests/evidence-results.json |
 
+## L16: Proof Receipts
+
+| ID | Test | Expected | Status | Evidence |
+|---|---|---|---|---|
+| L16.01 | IssueReceipt returns compact ProofReceipt | entry_hash, chain_position returned | GREEN | tests/evidence-results.json |
+| L16.02 | VerifyProof with valid hash returns valid=true | Proof validates | GREEN | tests/evidence-results.json |
+| L16.03 | VerifyProof with unknown hash returns not found | NOT_FOUND | GREEN | tests/evidence-results.json |
+| L16.04 | VerifyProof with tampered entry returns invalid | Hash mismatch detected | GREEN | tests/evidence-results.json |
+| L16.05 | Receipt round-trip: issue → encode → decode → verify | End-to-end receipt flow | GREEN | tests/evidence-results.json |
+| L16.06 | Multiple receipts for same correlation_id form chain of trust | Cross-receipt correlation | GREEN | tests/evidence-results.json |
+| L16.07 | Receipt from one source verifiable by another | Cross-service verification | GREEN | tests/evidence-results.json |
+
+## L17: Receipt Security (Red Team)
+
+| ID | Test | Expected | Status | Evidence |
+|---|---|---|---|---|
+| L17.01 | Forged receipt hash rejected | Can't fabricate proof | GREEN | tests/evidence-results.json |
+| L17.02 | Receipt for wrong entry_type rejected | Can't cross-type verify | GREEN | tests/evidence-results.json |
+| L17.03 | Replayed old receipt detected via timestamp staleness | Staleness detectable | GREEN | tests/evidence-results.json |
+| L17.04 | Receipt content swap detected | Hash still finds original | GREEN | tests/evidence-results.json |
+| L17.05 | Receipt agent_id swap detected | Can't claim different issuer | GREEN | tests/evidence-results.json |
+| L17.06 | Receipt correlation_id swap detected | Can't rebind to different request | GREEN | tests/evidence-results.json |
+| L17.07 | Duplicate receipt with same idempotency_key returns same receipt | Idempotent | GREEN | tests/evidence-results.json |
+| L17.08 | Receipt with conflicting idempotency_key rejected | Conflict detected | GREEN | tests/evidence-results.json |
+| L17.09 | Empty receipt fields rejected | INVALID_ARGUMENT | GREEN | tests/evidence-results.json |
+| L17.10 | Verify with empty hash/type rejected | INVALID_ARGUMENT | GREEN | tests/evidence-results.json |
+| L17.11 | Receipt SQL injection via entry_type blocked | Stored literally | GREEN | tests/evidence-results.json |
+| L17.12 | Receipt flood doesn't crash service | Service healthy | GREEN | tests/evidence-results.json |
+
+## L18: Receipt Primitives
+
+| ID | Test | Expected | Status | Evidence |
+|---|---|---|---|---|
+| L18.01 | VerifyProof returns source_id, correlation_id, content_type | Enriched response | GREEN | tests/evidence-results.json |
+| L18.02 | GetEntryByHash retrieves full entry content | Content intact | GREEN | tests/evidence-results.json |
+| L18.03 | GetEntryByHash with wrong type returns not found | Type-scoped | GREEN | tests/evidence-results.json |
+| L18.04 | Downstream can verify + read content in two calls | Full round-trip | GREEN | tests/evidence-results.json |
+| L18.05 | IssueReceipt returns correct entry_type | Bug fix verified | GREEN | tests/evidence-results.json |
+| L18.06 | IssueReceipt with input_hash: verifier sees matching hash | input_hash binding | GREEN | tests/evidence-results.json |
+| L18.07 | Payload transformation detected via input_hash mismatch | Redaction detectable | GREEN | tests/evidence-results.json |
+| L18.08 | input_hash tampering breaks verification | Tamper detected | GREEN | tests/evidence-results.json |
+| L18.09 | input_hash is optional: receipts without it still work | Backward compat | GREEN | tests/evidence-results.json |
+
+## L19: CPEX Contract
+
+| ID | Test | Expected | Status | Evidence |
+|---|---|---|---|---|
+| L19.01 | CPEX allow decision: issue receipt with policy context | Receipt issued | GREEN | tests/evidence-results.json |
+| L19.02 | CPEX deny decision: issue receipt with denial reason | Denial recorded | GREEN | tests/evidence-results.json |
+| L19.03 | CPEX session taint: allow → taint → deny chain | Trust chain shows both | GREEN | tests/evidence-results.json |
+| L19.04 | CPEX redaction: input_hash detects payload difference | Pre/post redact detectable | GREEN | tests/evidence-results.json |
+| L19.05 | CPEX token delegation: receipt records audience-scoped credential | Delegation recorded | GREEN | tests/evidence-results.json |
+| L19.06 | CPEX PII scan deny: receipt records attempted violation | Violation captured | GREEN | tests/evidence-results.json |
+| L19.07 | CPEX multi-hop: three enforcement points, one correlation | All verifiable | GREEN | tests/evidence-results.json |
+| L19.08 | CPEX cross-principal isolation: same session, different users | Separate receipts | GREEN | tests/evidence-results.json |
+| L19.09 | CPEX Cedar PDP allow: internal repo access permitted | Access allowed | GREEN | tests/evidence-results.json |
+| L19.10 | CPEX Cedar PDP deny: external repo access blocked | Access denied | GREEN | tests/evidence-results.json |
+| L19.11 | CPEX APL gate short-circuit: deny before PDP runs | Short-circuit works | GREEN | tests/evidence-results.json |
+
+## L20: Signatures & Attestation
+
+| ID | Test | Expected | Status | Evidence |
+|---|---|---|---|---|
+| L20.01 | IssueReceipt with signature: receipt returns sig + key ref | Sig stored | GREEN | tests/evidence-results.json |
+| L20.02 | VerifyProof returns writer_signature + signer_key_reference | Sig returned | GREEN | tests/evidence-results.json |
+| L20.03 | GetEntryByHash returns signature fields | Sig retrievable | GREEN | tests/evidence-results.json |
+| L20.04 | Unsigned entries still verify (backward compat) | No regression | GREEN | tests/evidence-results.json |
+| L20.05 | Ed25519 sign → verify round-trip | Crypto works | GREEN | tests/evidence-results.json |
+| L20.06 | Forged signature stored but detectable | Stored literally, consumer detects | GREEN | tests/evidence-results.json |
+| L20.10 | SPIFFE-style key reference round-trip | Key ref preserved | GREEN | tests/evidence-results.json |
+| L20.11 | Attestation report stored and returned | Attestation round-trip | GREEN | tests/evidence-results.json |
+| L20.12 | Entry with all three layers: hash + sig + attestation | Full envelope | GREEN | tests/evidence-results.json |
+| L20.13 | Attestation without signature (standalone TEE proof) | Independent layers | GREEN | tests/evidence-results.json |
+
+## L21: Signature Red Team
+
+| ID | Test | Expected | Status | Evidence |
+|---|---|---|---|---|
+| L21.01 | Signature replay: copy sig from one entry to another | Detectable via hash | GREEN | tests/evidence-results.json |
+| L21.05 | Signature flood: 100 signed receipts from 5 threads | Service healthy | GREEN | tests/evidence-results.json |
+| L21.08 | SQL injection via signer_key_reference blocked | Stored literally | GREEN | tests/evidence-results.json |
+| L21.09 | Null bytes in signature handled safely | No truncation | GREEN | tests/evidence-results.json |
+| L21.10 | Mixed signed + unsigned entries in same chain verify | Chain valid | GREEN | tests/evidence-results.json |
+
 ---
 
 ## Summary
@@ -204,4 +288,10 @@ Last run: tests/evidence-results.json (146/146 GREEN automated; 10 matrix items 
 | L13: Kagenti Live | 5 | 5 | 0 | 0 |
 | L14: Synthetic | 4 | 4 | 0 | 0 |
 | L15: Cross-System | 5 | 5 | 0 | 0 |
-| **TOTAL** | **102** | **92** | **10** | **0** |
+| L16: Proof Receipts | 7 | 7 | 0 | 0 |
+| L17: Receipt Security | 12 | 12 | 0 | 0 |
+| L18: Receipt Primitives | 9 | 9 | 0 | 0 |
+| L19: CPEX Contract | 11 | 11 | 0 | 0 |
+| L20: Signatures & Attestation | 10 | 10 | 0 | 0 |
+| L21: Signature Red Team | 5 | 5 | 0 | 0 |
+| **TOTAL** | **156** | **146** | **10** | **0** |

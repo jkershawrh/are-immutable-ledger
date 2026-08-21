@@ -1,4 +1,4 @@
-flask>=3.0
-flask-cors>=4.0
+fastapi>=0.110
+uvicorn>=0.29
 grpcio>=1.80.0
 protobuf>=6.31.1

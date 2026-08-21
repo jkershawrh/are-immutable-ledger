@@ -104,9 +104,9 @@ is temporarily halted and auto-recovers after a configurable timeout
 
 ## REST compatibility gateway
 
-The Flask gateway in `api/gateway.py` is an optional compatibility and UI
-adapter. It is not a second version of the contract and does not expose
-`/v1/ledger/*` routes.
+The async gateway in `api/gateway.py` (FastAPI + uvicorn) is an optional
+compatibility and UI adapter. It is not a second version of the contract
+and does not expose `/v1/ledger/*` routes.
 
 | Operation | Route |
 | --- | --- |

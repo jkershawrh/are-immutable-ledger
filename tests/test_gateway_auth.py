@@ -14,7 +14,10 @@ import sys
 
 import pytest
 
-flask = pytest.importorskip("flask", reason="gateway dependencies not installed")
+fastapi = pytest.importorskip(
+    "fastapi", reason="gateway dependencies not installed"
+)
+from fastapi.testclient import TestClient  # noqa: E402
 
 TOKEN = "ledger-gateway-test-token-not-a-real-secret"
 
@@ -48,27 +51,27 @@ def test_explicit_opt_in_allows_unauthenticated_local_use(monkeypatch):
 
 def test_write_endpoint_rejects_missing_token(monkeypatch):
     gateway = _load_gateway(monkeypatch, token=TOKEN)
-    response = gateway.app.test_client().post("/api/entries", json={})
-    assert response.status_code == 401, response.data
+    response = TestClient(gateway.app).post("/api/entries", json={})
+    assert response.status_code == 401, response.text
 
 
 def test_write_endpoint_rejects_wrong_token(monkeypatch):
     gateway = _load_gateway(monkeypatch, token=TOKEN)
-    response = gateway.app.test_client().post(
+    response = TestClient(gateway.app).post(
         "/api/entries", json={}, headers={"Authorization": "Bearer not-the-token"}
     )
-    assert response.status_code == 401, response.data
+    assert response.status_code == 401, response.text
 
 
 def test_read_endpoint_also_requires_a_token(monkeypatch):
     gateway = _load_gateway(monkeypatch, token=TOKEN)
-    response = gateway.app.test_client().get("/api/summary")
-    assert response.status_code == 401, response.data
+    response = TestClient(gateway.app).get("/api/summary")
+    assert response.status_code == 401, response.text
 
 
 def test_healthz_never_requires_credentials(monkeypatch):
     """Container probes must not need the token."""
     gateway = _load_gateway(monkeypatch, token=TOKEN)
-    response = gateway.app.test_client().get("/healthz")
-    assert response.status_code == 200, response.data
-    assert response.get_json()["status"] == "ok"
+    response = TestClient(gateway.app).get("/healthz")
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "ok"

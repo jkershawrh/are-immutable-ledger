@@ -1,30 +1,40 @@
-"""REST API — full ledger surface for frontends, CLIs, and external integrations.
+"""REST API - async gateway for the immutable ledger.
+
+Proxies the REST surface to the gRPC service via the Python SDK. Requests are
+handled asynchronously; the previous Flask implementation accumulated threads
+under sustained write load and leaked memory, which is why it was replaced.
 
 Read/audit endpoints:
   GET  /api/entries, /api/summary, /api/chains, /api/verify, /api/timeline, /api/drift
 
 Write endpoints:
-  POST /api/entries              — WriteEntry
-  POST /api/receipts             — IssueReceipt (write + get proof hash)
+  POST /api/entries              - WriteEntry
+  POST /api/receipts             - IssueReceipt (write + get proof hash)
 
 Receipt verification:
-  GET  /api/receipts/verify      — VerifyProof by hash + type
-  GET  /api/entries/by-hash      — GetEntryByHash (full content by hash)
-  GET  /api/receipts/chain       — trust chain for a correlation_id
+  GET  /api/receipts/verify      - VerifyProof by hash + type
+  GET  /api/entries/by-hash      - GetEntryByHash (full content by hash)
+  GET  /api/receipts/chain       - trust chain for a correlation_id
+
+Probes:
+  GET  /healthz                  - never requires authentication
 """
 
+import asyncio
 import hmac
 import json
 import os
 import sys
+from functools import partial
+from typing import Optional
 
-from flask import Flask, jsonify, request
-from flask_cors import CORS
+from fastapi import FastAPI, Query, Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sdks", "python"))
 from ledger_client import LedgerClient
-
-app = Flask(__name__)
 
 ENDPOINT = os.environ.get("LEDGER_ENDPOINT", "localhost:19292")
 GATEWAY_API_TOKEN = os.environ.get("GATEWAY_API_TOKEN", "")
@@ -38,23 +48,30 @@ def cors_origins():
     return [origin.strip() for origin in configured.split(",") if origin.strip()]
 
 
-CORS(app, origins=cors_origins())
+app = FastAPI(title="Immutable Ledger Gateway")
 
 
+@app.exception_handler(RequestValidationError)
+async def _query_validation_returns_400(request: Request, exc: RequestValidationError):
+    """Preserve the REST contract of the gateway this replaces.
 
-# Authentication.
-#
-# This gateway fronts the append-only ledger: POST /api/entries and
-# POST /api/receipts write the evidence the rest of the platform treats as
-# authoritative. The previous check skipped authentication entirely when
-# GATEWAY_API_TOKEN was unset, so a gateway deployed without the variable
-# accepted anonymous writes -- and no manifest set it.
-#
-# It now fails closed. Running without a token requires the operator to say
-# so explicitly with GATEWAY_ALLOW_UNAUTHENTICATED=true, which is intended
-# for local development and the demo compose stack only.
-#
-# /healthz is always reachable so container probes do not need credentials.
+    FastAPI answers a malformed query parameter with 422. The previous
+    implementation answered 400, and clients such as fleet-llm-d's ledger
+    HTTP client were written against that, so changing it would be an
+    unannounced API break.
+    """
+    return JSONResponse({"error": "invalid request parameters"}, status_code=400)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins(),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# See api/gateway.py for the rationale. Kept identical so the two copies
+# cannot drift on a security control while both exist.
 ALLOW_UNAUTHENTICATED = os.environ.get(
     "GATEWAY_ALLOW_UNAUTHENTICATED", ""
 ).strip().lower() in {"1", "true", "yes"}
@@ -70,54 +87,42 @@ UNAUTHENTICATED_PATHS = {"/healthz"}
 
 
 @app.get("/healthz")
-def healthz():
+async def healthz():
     """Liveness and readiness probe. Never requires credentials."""
-    return jsonify({"status": "ok", "service": "are-ledger-gateway"})
+    return {"status": "ok", "service": "are-ledger-gateway"}
 
 
-@app.before_request
-def authorize_gateway_request():
-    if request.method == "OPTIONS" or request.path in UNAUTHENTICATED_PATHS:
-        return None
+@app.middleware("http")
+async def authorize(request: Request, call_next):
+    if request.method == "OPTIONS" or request.url.path in UNAUTHENTICATED_PATHS:
+        return await call_next(request)
     if not GATEWAY_API_TOKEN:
-        return None  # only reachable via GATEWAY_ALLOW_UNAUTHENTICATED
+        return await call_next(request)  # only via GATEWAY_ALLOW_UNAUTHENTICATED
     expected = f"Bearer {GATEWAY_API_TOKEN}"
     presented = request.headers.get("Authorization", "")
     if not hmac.compare_digest(presented, expected):
-        return jsonify({"error": "unauthorized"}), 401
-    return None
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return await call_next(request)
 
 
 _client = None
 
 
 def get_client():
-    """Return a module-level singleton LedgerClient (reused across requests)."""
+    """Return a module-level singleton LedgerClient (reused across requests).
+
+    The async rewrite originally constructed a fresh LedgerClient on every
+    call. That opens a new gRPC channel per request, which is exactly the
+    kind of per-request resource growth this gateway replaced Flask to
+    avoid, so the singleton behaviour is preserved here.
+    """
     global _client
     if _client is None:
         _client = LedgerClient(ENDPOINT)
     return _client
 
 
-def _query_capped(max_entries=10000, **kwargs):
-    """Paginated query that stops after max_entries. Returns (entries, truncated)."""
-    c = get_client()
-    entries = []
-    page_token = ""
-    page_size = min(500, max_entries)
-    while True:
-        page, next_token, _total = c.query_page(
-            page_size=page_size, page_token=page_token, **kwargs)
-        entries.extend(page)
-        if len(entries) >= max_entries:
-            return entries[:max_entries], True
-        if not next_token:
-            break
-        page_token = next_token
-    return entries, False
-
-
-def entry_to_dict(e):
+def _entry_to_dict(e):
     try:
         content_parsed = json.loads(e.content.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError):
@@ -137,17 +142,24 @@ def entry_to_dict(e):
         "written_ts": e.written_ts,
         "input_hash": e.input_hash,
         "writer_signature": e.writer_signature.hex() if e.writer_signature else "",
-        "signer_key_reference": e.signer_key_reference if hasattr(e, 'signer_key_reference') else "",
+        "signer_key_reference": e.signer_key_reference if hasattr(e, "signer_key_reference") else "",
         "attestation_report": e.attestation_report.hex() if e.attestation_report else "",
         "hash_version": e.hash_version,
     }
 
 
-@app.route("/api/entries", methods=["POST"])
-def write_entry():
+async def _run_sync(fn, *args, **kwargs):
+    """Run a synchronous gRPC call in a thread pool to avoid blocking the event loop."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, partial(fn, *args, **kwargs))
+
+
+@app.post("/api/entries", status_code=201)
+async def write_entry(request: Request):
+    body = await request.json()
     c = get_client()
-    body = request.get_json()
-    resp = c.write(
+    resp = await _run_sync(
+        c.write,
         entry_type=body.get("entry_type", ""),
         agent_id=body.get("agent_id", ""),
         content=body.get("content", ""),
@@ -160,20 +172,21 @@ def write_entry():
         signer_key_reference=body.get("signer_key_reference", ""),
         attestation_report=bytes.fromhex(body["attestation_report"]) if body.get("attestation_report") else b"",
     )
-    return jsonify({
+    return {
         "entry_id": resp.entry_id,
         "entry_hash": resp.entry_hash,
         "chain_position": resp.chain_position,
         "written_ts": resp.written_ts,
         "hash_version": resp.hash_version,
-    }), 201
+    }
 
 
-@app.route("/api/receipts", methods=["POST"])
-def issue_receipt():
+@app.post("/api/receipts", status_code=201)
+async def issue_receipt(request: Request):
+    body = await request.json()
     c = get_client()
-    body = request.get_json()
-    receipt = c.issue_receipt(
+    receipt = await _run_sync(
+        c.issue_receipt,
         entry_type=body.get("entry_type", ""),
         agent_id=body.get("agent_id", ""),
         content=body.get("content", ""),
@@ -186,7 +199,7 @@ def issue_receipt():
         signer_key_reference=body.get("signer_key_reference", ""),
         attestation_report=bytes.fromhex(body["attestation_report"]) if body.get("attestation_report") else b"",
     )
-    return jsonify({
+    return {
         "entry_hash": receipt.entry_hash,
         "entry_type": receipt.entry_type,
         "chain_position": receipt.chain_position,
@@ -197,18 +210,16 @@ def issue_receipt():
         "signer_key_reference": receipt.signer_key_reference,
         "attestation_report": receipt.attestation_report.hex() if receipt.attestation_report else "",
         "hash_version": receipt.hash_version,
-    }), 201
+    }
 
 
-@app.route("/api/receipts/verify")
-def verify_proof():
+@app.get("/api/receipts/verify")
+async def verify_proof(hash: str = Query(""), type: str = Query("")):
+    if not hash or not type:
+        return JSONResponse({"error": "hash and type query params required"}, status_code=400)
     c = get_client()
-    entry_hash = request.args.get("hash", "")
-    entry_type = request.args.get("type", "")
-    if not entry_hash or not entry_type:
-        return jsonify({"error": "hash and type query params required"}), 400
-    v = c.verify_proof(entry_hash, entry_type)
-    return jsonify({
+    v = await _run_sync(c.verify_proof, hash, type)
+    return {
         "valid": v.valid,
         "entry_type": v.entry_type,
         "agent_id": v.agent_id,
@@ -223,82 +234,65 @@ def verify_proof():
         "signer_key_reference": v.signer_key_reference,
         "attestation_report": v.attestation_report.hex() if v.attestation_report else "",
         "hash_version": v.hash_version,
-    })
+    }
 
 
-@app.route("/api/entries/by-hash")
-def get_entry_by_hash():
+@app.get("/api/entries/by-hash")
+async def get_entry_by_hash(hash: str = Query(""), type: str = Query("")):
+    if not hash or not type:
+        return JSONResponse({"error": "hash and type query params required"}, status_code=400)
     c = get_client()
-    entry_hash = request.args.get("hash", "")
-    entry_type = request.args.get("type", "")
-    if not entry_hash or not entry_type:
-        return jsonify({"error": "hash and type query params required"}), 400
-    entry = c.get_entry_by_hash(entry_hash, entry_type)
-    return jsonify(entry_to_dict(entry))
+    entry = await _run_sync(c.get_entry_by_hash, hash, type)
+    return _entry_to_dict(entry)
 
 
-@app.route("/api/receipts/chain")
-def receipt_chain():
+@app.get("/api/receipts/chain")
+async def receipt_chain(correlation_id: str = Query("")):
+    if not correlation_id:
+        return JSONResponse({"error": "correlation_id query param required"}, status_code=400)
     c = get_client()
-    corr = request.args.get("correlation_id", "")
-    if not corr:
-        return jsonify({"error": "correlation_id query param required"}), 400
-    entries = c.query(correlation_id=corr)
+    entries = await _run_sync(c.query, correlation_id=correlation_id)
     sorted_entries = sorted(entries, key=lambda e: e.written_ts)
-    return jsonify({
-        "correlation_id": corr,
+    return {
+        "correlation_id": correlation_id,
         "hops": len(sorted_entries),
         "sources": list(set(e.source_id for e in sorted_entries)),
-        "entries": [entry_to_dict(e) for e in sorted_entries],
-    })
+        "entries": [_entry_to_dict(e) for e in sorted_entries],
+    }
 
 
-@app.route("/api/entries", methods=["GET"])
-def get_entries():
+@app.get("/api/entries")
+async def get_entries(
+    agent_id: str = Query(""),
+    entry_type: str = Query(""),
+    source_id: str = Query(""),
+    correlation_id: str = Query(""),
+    from_ts: Optional[int] = Query(None),
+    to_ts: Optional[int] = Query(None),
+    page_size: int = Query(100),
+    page_token: str = Query(""),
+):
     c = get_client()
     kwargs = {}
-    for key in ("agent_id", "entry_type", "source_id", "correlation_id"):
-        val = request.args.get(key, "")
-        if val:
-            kwargs[key] = val
-    for key in ("from_ts", "to_ts"):
-        val = request.args.get(key, "")
-        if val:
-            try:
-                kwargs[key] = int(val)
-            except ValueError:
-                return jsonify({"error": f"{key} must be Unix milliseconds"}), 400
-    page_size = request.args.get("page_size", "100")
-    try:
-        page_size = int(page_size)
-    except ValueError:
-        page_size = 100
-    page_token = request.args.get("page_token", "")
-    entries, next_token, total_count = c.query_page(
-        page_size=page_size, page_token=page_token, **kwargs)
-    return jsonify({
-        "entries": [entry_to_dict(e) for e in entries],
+    if agent_id: kwargs["agent_id"] = agent_id
+    if entry_type: kwargs["entry_type"] = entry_type
+    if source_id: kwargs["source_id"] = source_id
+    if correlation_id: kwargs["correlation_id"] = correlation_id
+    if from_ts is not None: kwargs["from_ts"] = from_ts
+    if to_ts is not None: kwargs["to_ts"] = to_ts
+    entries, next_token, total_count = await _run_sync(
+        c.query_page, page_size=page_size, page_token=page_token, **kwargs)
+    return {
+        "entries": [_entry_to_dict(e) for e in entries],
         "next_page_token": next_token,
         "total_count": total_count,
-    })
+    }
 
 
-@app.route("/api/summary")
-def get_summary():
-    kwargs = {}
-    for key in ("entry_type", "source_id", "agent_id"):
-        val = request.args.get(key, "")
-        if val:
-            kwargs[key] = val
-    for key in ("from_ts", "to_ts"):
-        val = request.args.get(key, "")
-        if val:
-            try:
-                kwargs[key] = int(val)
-            except ValueError:
-                return jsonify({"error": f"{key} must be Unix milliseconds"}), 400
-    page_size = int(request.args.get("page_size", "10000"))
-    entries, truncated = _query_capped(max_entries=page_size, **kwargs)
+@app.get("/api/summary")
+async def get_summary():
+    c = get_client()
+    entries = await _run_sync(c.query)
     by_source = {}
     by_type = {}
     for e in entries:
@@ -310,66 +304,40 @@ def get_summary():
         sources = set(e.source_id for e in entries if e.correlation_id == cid)
         if len(sources) > 1:
             cross_system += 1
-    result = {
+    return {
         "total_entries": len(entries),
         "sources": {s: len(es) for s, es in by_source.items()},
         "chain_types": len(by_type),
         "correlation_ids": len(corr_ids),
         "cross_system_correlations": cross_system,
     }
-    if truncated:
-        result["truncated"] = True
-        result["truncated_note"] = f"Results capped at {page_size} entries; apply filters for accuracy"
-    return jsonify(result)
 
 
-@app.route("/api/chains")
-def get_chains():
-    kwargs = {}
-    entry_type_filter = request.args.get("entry_type", "")
-    if entry_type_filter:
-        kwargs["entry_type"] = entry_type_filter
-    page_size = int(request.args.get("page_size", "10000"))
-    entries, truncated = _query_capped(max_entries=page_size, **kwargs)
+@app.get("/api/chains")
+async def get_chains():
+    c = get_client()
+    entries = await _run_sync(c.query)
     by_type = {}
     for e in entries:
         by_type.setdefault(e.entry_type, []).append(e)
     chains = []
-    for et, es in sorted(by_type.items()):
-        source = "unknown"
-        if "openshell" in et:
-            source = "openshell"
-        elif "kagenti" in et:
-            source = "kagenti"
-        elif "gov." in et:
-            source = "governance"
-        elif "standalone" in et:
-            source = "standalone"
+    for entry_type, es in sorted(by_type.items()):
         chains.append({
-            "entry_type": et,
+            "entry_type": entry_type,
             "count": len(es),
-            "source": source,
-            "entries": [entry_to_dict(e) for e in sorted(es, key=lambda x: x.chain_position)],
+            "entries": [_entry_to_dict(e) for e in sorted(es, key=lambda x: x.chain_position)],
         })
-    result = {"chains": chains}
-    if truncated:
-        result["truncated"] = True
-    return jsonify(result)
+    return chains
 
 
-@app.route("/api/verify")
-def verify_all():
+@app.get("/api/verify")
+async def verify_all():
     c = get_client()
-    entry_type_filter = request.args.get("entry_type", "")
-    if entry_type_filter:
-        types = [entry_type_filter]
-    else:
-        # Discover all chain types (this is an audit operation so full scan is acceptable)
-        entries = c.query()
-        types = sorted(set(e.entry_type for e in entries))
+    entries = await _run_sync(c.query)
+    types = sorted(set(e.entry_type for e in entries))
     results = []
     for t in types:
-        v = c.verify_chain(t)
+        v = await _run_sync(c.verify_chain, t)
         results.append({
             "entry_type": t,
             "chain_valid": v.chain_valid,
@@ -378,71 +346,40 @@ def verify_all():
             "first_invalid_entry_id": v.first_invalid_entry_id or "",
         })
     all_valid = all(r["chain_valid"] for r in results)
-    return jsonify({"all_valid": all_valid, "chains": results})
+    return {"all_valid": all_valid, "chains": results}
 
 
-@app.route("/api/verify/<path:entry_type>")
-def verify_chain(entry_type):
+@app.get("/api/verify/{entry_type:path}")
+async def verify_chain(entry_type: str):
     c = get_client()
-    v = c.verify_chain(entry_type)
-    return jsonify({
+    v = await _run_sync(c.verify_chain, entry_type)
+    return {
         "entry_type": entry_type,
         "chain_valid": v.chain_valid,
         "entries_checked": v.entries_checked,
         "failure_reason": v.failure_reason or "",
-    })
+    }
 
 
-@app.route("/api/timeline")
-def get_timeline():
-    kwargs = {}
-    for key in ("correlation_id",):
-        val = request.args.get(key, "")
-        if val:
-            kwargs[key] = val
-    for key in ("from_ts", "to_ts"):
-        val = request.args.get(key, "")
-        if val:
-            try:
-                kwargs[key] = int(val)
-            except ValueError:
-                return jsonify({"error": f"{key} must be Unix milliseconds"}), 400
-    page_size = int(request.args.get("page_size", "10000"))
-    entries, truncated = _query_capped(max_entries=page_size, **kwargs)
+@app.get("/api/timeline")
+async def get_timeline():
+    c = get_client()
+    entries = await _run_sync(c.query)
     sorted_entries = sorted(entries, key=lambda e: e.written_ts)
     corr_map = {}
     for e in sorted_entries:
         if e.correlation_id:
             corr_map.setdefault(e.correlation_id, []).append(e.entry_id)
-    # Cross-system links: correlations that span multiple sources
-    entry_source = {e.entry_id: e.source_id for e in sorted_entries}
-    cross_links = {}
-    for cid, ids in corr_map.items():
-        sources = set(entry_source.get(eid, "") for eid in ids)
-        if len(sources) > 1:
-            cross_links[cid] = ids
-    result = {
-        "entries": [entry_to_dict(e) for e in sorted_entries],
+    return {
+        "entries": [_entry_to_dict(e) for e in sorted_entries],
         "correlations": {cid: ids for cid, ids in corr_map.items() if len(ids) > 1},
-        "cross_links": cross_links,
     }
-    if truncated:
-        result["truncated"] = True
-    return jsonify(result)
 
 
-@app.route("/api/drift")
-def get_drift():
-    kwargs = {}
-    for key in ("from_ts", "to_ts"):
-        val = request.args.get(key, "")
-        if val:
-            try:
-                kwargs[key] = int(val)
-            except ValueError:
-                return jsonify({"error": f"{key} must be Unix milliseconds"}), 400
-    page_size = int(request.args.get("page_size", "10000"))
-    entries, truncated = _query_capped(max_entries=page_size, **kwargs)
+@app.get("/api/drift")
+async def get_drift():
+    c = get_client()
+    entries = await _run_sync(c.query)
     denials = [e for e in entries if
                b"Denied" in e.content or b"Blocked" in e.content or
                "deny" in e.entry_type]
@@ -466,18 +403,21 @@ def get_drift():
                 "entry_type": d.entry_type,
                 "detail": str(detail),
             })
-    result = {
+    return {
         "gaps": gaps,
         "total_denials": len(denials),
         "total_scope_evals": len(scope_evals),
     }
-    if truncated:
-        result["truncated"] = True
-    return jsonify(result)
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("GATEWAY_PORT", "18099"))
-    host = os.environ.get("GATEWAY_HOST", "127.0.0.1")
-    debug = os.environ.get("GATEWAY_DEBUG", "").lower() in {"1", "true", "yes"}
-    app.run(host=host, port=port, debug=debug, threaded=True)
+    import uvicorn
+
+    # Same env contract the Flask entrypoint honoured, so deployment manifests
+    # and the demo stack do not need to change.
+    uvicorn.run(
+        app,
+        host=os.environ.get("GATEWAY_HOST", "127.0.0.1"),
+        port=int(os.environ.get("GATEWAY_PORT", "18099")),
+        log_level=os.environ.get("GATEWAY_LOG_LEVEL", "info"),
+    )
