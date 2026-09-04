@@ -47,7 +47,7 @@ curl -sf "$HEALTH_URL" >/dev/null || { echo "ledger is not ready at $HEALTH_URL"
 
 echo "Importing Jeff's six-record NDJSON bundle..."
 IMPORT_OUTPUT="$(python3 "$REPO_DIR/adapters/cpex/cpex_to_ledger.py" \
-  --endpoint "$LEDGER_ENDPOINT" --file "$RECORDS" 2>&1)"
+  --endpoint "$LEDGER_ENDPOINT" --strict-gaps --file "$RECORDS" 2>&1)"
 echo "$IMPORT_OUTPUT"
 echo "$IMPORT_OUTPUT" | grep -Eq "Written: 6[[:space:]]+Errors: 0.*Gaps: 0" || {
   echo "expected six writes with zero errors and zero epoch-scoped gaps" >&2

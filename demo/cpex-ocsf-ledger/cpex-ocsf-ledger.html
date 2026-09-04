@@ -335,7 +335,7 @@
 
   <main id="top">
     <div class="shell hero">
-      <p class="eyebrow">Joint architecture and demo plan · 2026-08-31</p>
+      <p class="eyebrow">Joint architecture and demo plan · 2026-09-04</p>
       <h1>Every verdict becomes evidence.</h1>
       <p class="lede">One request path, three independent projects, and no shared implementation. CPEX owns the enforcement decision. The OCSF plugin renders signed evidence. The immutable ledger makes it durable and independently verifiable.</p>
       <div class="status-strip" aria-label="Project status">
@@ -344,8 +344,8 @@
         <span class="tag"><span class="dot"></span>Ledger covered bytes aligned</span>
         <span class="tag"><span class="dot"></span>Ledger current stream shape merged</span>
         <span class="tag"><span class="dot"></span>AI-Identity #499 runner merged</span>
-        <span class="tag"><span class="dot"></span>Rev 2 · 6/6 signatures verified</span>
-        <span class="tag"><span class="dot pending"></span>Beat 06 panic harness pending</span>
+        <span class="tag"><span class="dot"></span>Rev 3 · 6/6 signatures verified</span>
+        <span class="tag"><span class="dot"></span>Beat 06 real panic verified</span>
         <span class="tag"><span class="dot pending"></span>Praxis Policy #11/#12 pending</span>
       </div>
     </div>
@@ -385,7 +385,7 @@
 
         <div class="boundary">
           <strong>Honest boundary</strong>
-          <p>Rev 2 is accepted end to end: six DSSE signatures verify, <code>agent-7</code> and conversation <code>run-4bf92f35</code> survive a real SIGKILL and span both epochs, and request <code>corr-7f3e2a91</code> remains separately bound to Beat 05. OAuth <code>begin_effect</code> / recovery remains distinct from a class-correct OCSF effect event until Praxis Policy #12 and the plugin settle that contract. The <code>plugin_panic</code> core path is live on #166; Beat 06 remains amber because its record is staged rather than driven by a panicking plugin.</p>
+          <p>Rev 3 is accepted end to end against CPEX <code>64c8eba</code>: six DSSE signatures verify, <code>agent-7</code> and conversation <code>run-4bf92f35</code> survive a real SIGKILL and span both epochs, and request <code>corr-7f3e2a91</code> remains separately bound to Beat 05. Beat 06 is a real <code>plugin_panic</code> driven through the PluginManager and recorded on the same <code>gw-1:decision</code> stream at a fresh epoch and <code>stream_seq 0</code>. OAuth <code>begin_effect</code> / recovery remains distinct from a class-correct OCSF effect event until Praxis Policy #12 and the plugin settle that contract.</p>
         </div>
       </div>
     </section>
@@ -431,11 +431,11 @@
             <p class="outcome warn">prepared → kill -9 → unknown</p>
             <p class="evidence">The decision carries <code>cmf.request.request_id</code>. Effect recovery remains a separate WAL proof; the new epoch is the expected <code>stream_seq</code> discontinuity, never a gap.</p>
           </article>
-          <article class="beat" role="listitem" data-presenter="Run the demo-only panicking plugin if its harness is present. Show fail-closed behavior and queryable plugin_panic evidence; otherwise identify this beat as staged.">
+          <article class="beat" role="listitem" data-presenter="Drive the real panicking plugin through PluginManager. Show fail-closed behavior, the fresh epoch at sequence zero, and queryable plugin_panic evidence.">
             <span class="time">02:05</span><span class="number">06</span>
-            <h3>Panicking plugin <span class="quiet small">· harness pending</span></h3>
+            <h3>Panicking plugin <span class="quiet small">· real path</span></h3>
             <p class="outcome deny">Denied / Blocked · plugin_panic</p>
-            <p class="evidence">The #166 runtime path is live: <code>catch_unwind</code> → finalized deny → awaited audit sink. Amber until the runnable OCSF example exists.</p>
+            <p class="evidence"><code>catch_unwind</code> → finalized deny → awaited audit sink on <code>gw-1:decision</code>, fresh epoch, <code>stream_seq 0</code>.</p>
           </article>
         </div>
 
@@ -451,7 +451,7 @@
               <li>Query <code>plugin_panic</code>, <code>deny_ignored</code>, and <code>Modified</code>; confirm the separate request join key remains in the signed record.</li>
             </ol>
             <p style="margin-top:14px"><code>python3 scripts/aid_emit1_validator.py records.ndjson --key pubkey.pem</code></p>
-            <p class="small quiet" style="margin-top:10px">No <code>--strict-gaps</code> on stage: findings remain visible without turning an honestly scoped boundary into a failed demo.</p>
+            <p class="small quiet" style="margin-top:10px">Run with <code>--strict-gaps</code>: a missing epoch head, an interior gap, or epoch regression fails the acceptance gate visibly.</p>
           </aside>
         </div>
       </div>
@@ -507,8 +507,8 @@
         </div>
 
         <div class="gates" aria-label="Definition of done checklist">
-          <label class="gate"><input type="checkbox" data-gate><h3>Pin exact revisions</h3><p>Print verbatim: <code>seam cpex#166 @ 5a253d4 · rustc 1.96.1 · 33/33 port tests green</code>. Also print the ledger and AID-EMIT-1 revisions.</p></label>
-          <label class="gate"><input type="checkbox" data-gate><h3>Produce deterministic evidence</h3><p>Rev 2 passes four content hashes, 6/6 DSSE signatures, two independently dense epochs, one valid ledger chain, six-record agent/run queries, and one Beat 05 request-key match.</p></label>
+          <label class="gate"><input type="checkbox" data-gate><h3>Pin exact revisions</h3><p>Print verbatim: <code>seam cpex#166 @ 64c8eba · rustc 1.96.1 · 33/33 port tests green</code>. Also print the ledger and AID-EMIT-1 revisions.</p></label>
+          <label class="gate"><input type="checkbox" data-gate><h3>Produce deterministic evidence</h3><p>Rev 3 passes four content hashes, 6/6 DSSE signatures, one dense <code>gw-1:decision</code> stream across two epochs, one valid ledger chain, six-record agent/run queries, and one Beat 05 request-key match.</p></label>
           <label class="gate"><input type="checkbox" data-gate><h3>Verify without services</h3><p>Fingerprints, signatures, sequence density, and ledger chains verify from exported bundles with networking disabled.</p></label>
           <label class="gate"><input type="checkbox" data-gate><h3>Keep the effect boundary explicit</h3><p>Recovery is shown from the effect WAL until Policy #12 defines and implements the OCSF effect event.</p></label>
           <label class="gate"><input type="checkbox" data-gate><h3>Repeat on PPE</h3><p>After Policy #11/#12 land, swap the dependency and publish a side-by-side conformance report; no silent compatibility shim.</p></label>
@@ -531,6 +531,7 @@
           <a class="source" href="https://github.com/Levaj2000/AI-Identity/pull/499">AI-Identity #499 demo runner</a>
           <a class="source" href="https://github.com/Levaj2000/AI-Identity/blob/main/integrations/cpex-ocsf-audit/PRAXIS-PORT-PLAN.md">Jeff’s PPE port plan</a>
           <a class="source" href="https://github.com/jkershawrh/are-immutable-ledger/pull/14">Ledger PR #14 · stream shape merged</a>
+          <a class="source" href="https://github.com/jkershawrh/are-immutable-ledger/pull/15">Ledger PR #15 · epoch-head and regression checks</a>
           <a class="source" href="https://github.com/jkershawrh/are-immutable-ledger">Immutable ledger</a>
         </div>
       </div>

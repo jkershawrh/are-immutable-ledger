@@ -21,7 +21,8 @@ checks that the two epoch-scoped sequences are gap-free, verifies the ledger's
 per-request key is not overloaded into that field.
 
 The producer restart deliberately creates a new attestation `chain_uid` while
-retaining stream `gw-1/boot-7`. This is valid: CPEX density is scoped to
+retaining the host-named stream `gw-1:decision`. Both epochs open at
+`stream_seq` 0. This is valid: CPEX density is scoped to
 `(epoch, stream_id)`, emitter attestation continuity is scoped to `chain_uid`,
 and ledger durability is independently scoped to `entry_type`.
 

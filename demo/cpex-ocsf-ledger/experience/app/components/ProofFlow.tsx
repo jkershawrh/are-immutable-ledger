@@ -15,8 +15,10 @@ const roles = [
 
 const links = [['alice','agent'],['agent','praxis'],['praxis','cpex'],['cpex','ocsf'],['ocsf','ledger'],['ledger','verify']];
 
-export function ProofFlow({ activeIndex }: { activeIndex: number }) {
-  const activeByStep = ['agent','praxis','cpex','cpex','cpex','ocsf','ledger','verify'];
+export function ProofFlow({ activeIndex, perspective = 'business' }: { activeIndex: number; perspective?: 'business' | 'technical' }) {
+  const activeByStep = perspective === 'technical'
+    ? ['agent','cpex','cpex','cpex','ocsf','ocsf','cpex','verify']
+    : ['agent','praxis','cpex','cpex','cpex','ocsf','ledger','verify'];
   const active = activeByStep[Math.min(activeIndex, activeByStep.length - 1)];
   const nodes: Node[] = roles.map(role => ({
     id: role.id,
