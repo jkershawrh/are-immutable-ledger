@@ -37,8 +37,11 @@ python cpex_to_ledger.py --write-only --file audit.jsonl
 
 The adapter validates two counters from the CPEX audit seam:
 
-- **`stream_seq`** (per `(epoch, stream_id)`) — completeness claim. Dense within its stream and process lifetime; a gap means a missing record. The adapter alerts on gaps.
+- **`stream_seq`** (per `(epoch, stream_id)`) — completeness claim. Dense within its stream and process lifetime, **opening at 0** (CPEX stamps from a zero-initialised counter); a gap means a missing record. The adapter alerts on interior gaps and on the head of every epoch — a first record above 0 means records `0..n-1` never arrived, which a tail-only check cannot see. A new epoch on the same stream is a producer restart: a boundary, never a gap.
+- **`epoch`** (per `stream_id`) — boot-ordered. An older epoch arriving after a newer one on the same stream (a late replay of a dead process, or a host-supplied `plugin_settings.audit_epoch` that failed to advance — CPEX only warns) is alerted as an epoch regression.
 - **`emission_seq`** (global within an epoch) — ordering claim only. Legitimately sparse for single-stream consumers. The adapter alerts on non-monotonic values (ordering violations) but not on gaps.
+
+`stream_id` is opaque. A CPEX host that sets `plugin_settings.audit_stream_namespace` stamps it as `<namespace>:<kind>` (`gw-1:decision`, `gw-1:effect`); the namespace may itself contain `:`, so recover the kind with `rsplit(":", 1)` if you ever need it. The adapter never does — `entry_type` comes from the record's own content, and the Rev 3 joint-demo bundle (`tests/fixtures/aid_emit_1_rev3_bundle.jsonl`) is one such stream across two epochs.
 
 Current AID-EMIT-1 records carry all four stamps under `unmapped."cpex.stream"`. Top-level stamps remain accepted only for replaying the adapter's legacy input shape.
 

@@ -16,8 +16,18 @@ ledger entry with:
   writer_signature:     unmapped.signature_b64 (base64-decoded)
   signer_key_reference: unmapped.signature_key_id
 
-Gap detection: validates stream_seq continuity per stream_id and
-emission_seq monotonicity. Alerts on gaps but still writes records.
+Gap detection: validates stream_seq continuity per (epoch, stream_id) —
+including the head of every epoch, which opens at stream_seq 0 — epoch
+ordering per stream_id, and emission_seq monotonicity. Alerts on gaps but
+still writes records.
+
+Stream ids are opaque to the adapter. A CPEX host that sets
+plugin_settings.audit_stream_namespace stamps them as "<namespace>:<kind>"
+(e.g. "gw-1:decision" / "gw-1:effect"); the namespace may itself contain
+":", so anything that needs the kind back splits on the LAST colon
+(rsplit(":", 1)). Nothing here does — entry_type comes from the record's
+own content (unmapped."cpex.decision" / "cpex.effect"), never from the
+stream id.
 
 Usage:
   python cpex_to_ledger.py --file /var/log/cpex-audit.jsonl
@@ -47,12 +57,41 @@ LEGACY_STREAM_PREFIX_MAP = {
 
 UNMAPPED_ENVELOPE_KEYS = ("signature_b64", "signature_key_id")
 
+# The first stream_seq a host emits in an epoch. AID-EMIT-1 section 7 defines
+# stream_seq as dense within (epoch, stream_id), and the reference host (CPEX)
+# stamps from a zero-initialised counter, so every epoch opens at 0.
+STREAM_HEAD_SEQ = 0
+
 
 class GapDetector:
-    """Tracks stream_seq continuity per stream_id and emission_seq monotonicity."""
+    """Tracks stream_seq continuity per (epoch, stream_id), the head of each
+    epoch, epoch ordering per stream_id, and emission_seq monotonicity.
+
+    Density is a per-(epoch, stream_id) property: a producer restart opens a
+    new epoch and legitimately resets the counter, so a new epoch is never a
+    gap. Two things ARE alerted that a tail-only check cannot see:
+
+    * The head of every epoch. An epoch opens at stream_seq 0, so a first
+      record above 0 means records 0..n-1 never arrived. The record emitted
+      while the process is still coming up is the one most likely to be
+      dropped, and it is exactly the one that leaves no tail to check
+      against — so a restart that lost record 0 used to read as a clean,
+      dense epoch. Applied to epoch-stamped records only: the legacy
+      top-level shape predates section 7 and carries no epoch, so it has no
+      defined head.
+
+    * Epoch regression. Epochs are boot-ordered per stream, and since CPEX
+      lets the host supply the epoch (plugin_settings.audit_epoch, a
+      programmatic override that CPEX only warns about when it fails to
+      advance) an older epoch arriving after a newer one is either a late
+      replay of a dead process or a host that pinned its epoch — in both
+      cases the completeness claim for that stream no longer holds, and it
+      used to pass silently.
+    """
 
     def __init__(self):
         self._last_seq = {}
+        self._newest_epoch = {}
         self._last_emission_seq = {}
 
     def check(self, stream_id, stream_seq, emission_seq, epoch=None):
@@ -65,8 +104,26 @@ class GapDetector:
                 alerts.append(
                     f"GAP in {stream_id}: expected stream_seq {expected}, got {stream_seq}"
                 )
+        elif epoch is not None and stream_seq != STREAM_HEAD_SEQ:
+            # First record seen for this (epoch, stream_id): it must be the
+            # head. Reported once, here; the records that follow are then
+            # checked against this (anomalous) tail, not re-flagged.
+            alerts.append(
+                f"GAP at head of {stream_id} epoch {epoch}: expected stream_seq "
+                f"{STREAM_HEAD_SEQ}, got {stream_seq} "
+                f"(records {STREAM_HEAD_SEQ}..{stream_seq - 1} not seen)"
+            )
 
         self._last_seq[stream_key] = stream_seq
+
+        if isinstance(epoch, int):
+            newest = self._newest_epoch.get(stream_id)
+            if isinstance(newest, int) and epoch < newest:
+                alerts.append(
+                    f"EPOCH REGRESSION in {stream_id}: epoch {epoch} after {newest}"
+                )
+            elif newest is None or epoch > newest:
+                self._newest_epoch[stream_id] = epoch
 
         previous_emission_seq = self._last_emission_seq.get(epoch, -1)
         if emission_seq is not None and emission_seq <= previous_emission_seq:

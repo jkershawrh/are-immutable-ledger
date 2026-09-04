@@ -261,15 +261,63 @@ class TestGapDetection:
         assert any("ORDERING" in a for a in alerts)
 
     def test_new_epoch_starts_fresh_sequence_scope(self, gap_detector):
-        gap_detector.check("gw-1", 7, 42, epoch=100)
-        alerts = gap_detector.check("gw-1", 1, 1, epoch=101)
+        gap_detector.check("gw-1", 0, 41, epoch=100)
+        gap_detector.check("gw-1", 1, 42, epoch=100)
+        # A restart opens a new epoch at 0: a boundary, never a gap.
+        alerts = gap_detector.check("gw-1", 0, 0, epoch=101)
         assert alerts == []
 
     def test_same_stream_id_is_independent_across_epochs(self, gap_detector):
+        # Density is keyed on (epoch, stream_id): epoch 101 opening at 0
+        # says nothing about epoch 100's counter, which stood at 1. (Epochs
+        # arrive in boot order — an epoch-100 record AFTER epoch 101 is a
+        # regression, covered below, not independence.)
+        gap_detector.check("gw-1", 0, 0, epoch=100)
         gap_detector.check("gw-1", 1, 1, epoch=100)
-        gap_detector.check("gw-1", 1, 1, epoch=101)
-        assert gap_detector.check("gw-1", 2, 2, epoch=100) == []
-        assert gap_detector.check("gw-1", 2, 2, epoch=101) == []
+        assert gap_detector.check("gw-1", 0, 0, epoch=101) == []
+        assert gap_detector.check("gw-1", 1, 1, epoch=101) == []
+
+    def test_head_of_epoch_must_be_zero(self, gap_detector):
+        # The first record seen for an (epoch, stream_id) must be seq 0.
+        alerts = gap_detector.check("gw-1:decision", 1, 1, epoch=100)
+        assert len(alerts) == 1
+        assert "GAP at head" in alerts[0]
+        assert "expected stream_seq 0, got 1" in alerts[0]
+        assert "records 0..0 not seen" in alerts[0]
+
+    def test_lost_record_zero_after_restart_is_a_gap(self, gap_detector):
+        # Epoch 100 is complete. Epoch 101 opens at 1: record 0 — the one
+        # emitted while the process was still coming up — never arrived.
+        # A tail-only check accepted this as a clean restart.
+        for seq in range(3):
+            assert gap_detector.check("gw-1:decision", seq, seq, epoch=100) == []
+        alerts = gap_detector.check("gw-1:decision", 1, 1, epoch=101)
+        assert any("GAP at head" in a and "epoch 101" in a for a in alerts)
+        # Reported once at the head; dense after it, not re-flagged.
+        assert gap_detector.check("gw-1:decision", 2, 2, epoch=101) == []
+
+    def test_head_check_is_scoped_to_epoch_stamped_records(self, gap_detector):
+        # The legacy top-level shape predates AID-EMIT-1 section 7 and has no
+        # epoch, so it has no defined head: unchanged behaviour.
+        assert gap_detector.check("dec-001", 1, 1) == []
+        assert gap_detector.check("dec-001", 2, 2) == []
+
+    def test_epoch_regression_is_alerted(self, gap_detector):
+        # Epochs are boot-ordered per stream. An older epoch after a newer
+        # one is a late replay or a pinned host epoch; either way it passed
+        # silently before, and CPEX itself only warns.
+        assert gap_detector.check("gw-1:decision", 0, 0, epoch=101) == []
+        alerts = gap_detector.check("gw-1:decision", 0, 0, epoch=100)
+        assert len(alerts) == 1
+        assert "EPOCH REGRESSION" in alerts[0]
+        assert "epoch 100 after 101" in alerts[0]
+        # The stream's newest epoch stays 101; its stream stays dense.
+        assert gap_detector.check("gw-1:decision", 1, 1, epoch=101) == []
+
+    def test_epoch_regression_is_per_stream(self, gap_detector):
+        assert gap_detector.check("gw-1:decision", 0, 0, epoch=101) == []
+        # A different stream at an older epoch is not a regression of gw-1's.
+        assert gap_detector.check("gw-2:decision", 0, 0, epoch=100) == []
 
 
 # --- Content canonicalization ---
@@ -367,31 +415,34 @@ class TestProcessLine:
     def test_restart_uses_new_epoch_and_attestation_chain_without_false_gap(
         self, mock_client, stats, gap_detector
     ):
-        first = make_decision_event(stream_id="gw-1/boot-7")
-        first["metadata"]["uid"] = "producer-a-000005"
+        # Rev 3 shape: the host names the stream ("<namespace>:decision"),
+        # each epoch opens at stream_seq 0, and each producer process owns
+        # its own attestation chain.
+        first = make_decision_event(stream_id="gw-1:decision")
+        first["metadata"]["uid"] = "producer-a-000000"
         first["attestation_list"] = [{"chain_uid": "producer-a"}]
         first["unmapped"].update(
             {
                 "cpex.decision": {"verdict": "allow", "steps": []},
                 "cpex.stream": {
                     "epoch": 1755648000000000000,
-                    "stream_id": "gw-1/boot-7",
-                    "stream_seq": 45,
-                    "emission_seq": 45,
+                    "stream_id": "gw-1:decision",
+                    "stream_seq": 0,
+                    "emission_seq": 0,
                 },
             }
         )
-        restarted = make_decision_event(stream_id="gw-1/boot-7")
-        restarted["metadata"]["uid"] = "producer-b-000001"
+        restarted = make_decision_event(stream_id="gw-1:decision")
+        restarted["metadata"]["uid"] = "producer-b-000000"
         restarted["attestation_list"] = [{"chain_uid": "producer-b"}]
         restarted["unmapped"].update(
             {
                 "cpex.decision": {"verdict": "deny", "steps": []},
                 "cpex.stream": {
                     "epoch": 1755649000000000000,
-                    "stream_id": "gw-1/boot-7",
-                    "stream_seq": 1,
-                    "emission_seq": 1,
+                    "stream_id": "gw-1:decision",
+                    "stream_seq": 0,
+                    "emission_seq": 0,
                 },
             }
         )
@@ -403,8 +454,78 @@ class TestProcessLine:
         assert stats["gaps_detected"] == 0
         calls = mock_client.issue_receipt.call_args_list
         assert calls[0].kwargs["entry_type"] == calls[1].kwargs["entry_type"] == "cpex.decision"
-        assert calls[0].kwargs["idempotency_key"] == "producer-a-000005"
-        assert calls[1].kwargs["idempotency_key"] == "producer-b-000001"
+        assert calls[0].kwargs["idempotency_key"] == "producer-a-000000"
+        assert calls[1].kwargs["idempotency_key"] == "producer-b-000000"
+
+    def test_restart_that_lost_record_zero_is_a_gap(self, mock_client, stats, gap_detector):
+        # Same restart, but epoch 2 opens at 1: the head is missing, and
+        # --strict-gaps must see it. Before the head check this counted as
+        # a clean restart — the exact record most likely to be lost was the
+        # one the detector never inspected.
+        def stamped(uid, epoch, seq):
+            event = make_decision_event(stream_id="gw-1:decision")
+            event["metadata"]["uid"] = uid
+            event["unmapped"].update(
+                {
+                    "cpex.decision": {"verdict": "allow", "steps": []},
+                    "cpex.stream": {
+                        "epoch": epoch,
+                        "stream_id": "gw-1:decision",
+                        "stream_seq": seq,
+                        "emission_seq": seq,
+                    },
+                }
+            )
+            return json.dumps(event)
+
+        process_line(mock_client, stamped("a-0", 1, 0), stats, gap_detector)
+        process_line(mock_client, stamped("a-1", 1, 1), stats, gap_detector)
+        process_line(mock_client, stamped("b-1", 2, 1), stats, gap_detector)
+        assert stats["written"] == 3
+        assert stats["gaps_detected"] == 1
+
+    @pytest.mark.parametrize("line_number", range(6))
+    def test_rev3_bundle_records_are_written_with_reproducible_fingerprints(
+        self, mock_client, stats, gap_detector, line_number
+    ):
+        # The Rev 3 joint-demo bundle, verbatim: six DSSE-signed records on
+        # ONE host-named stream (gw-1:decision) across two epochs — beats
+        # 01-05, then a real plugin_panic driven through the CPEX
+        # PluginManager in a new process. Every record must reach the
+        # ledger on the cpex.decision chain with a fingerprint the adapter
+        # reproduces, and the run must correlate all six.
+        fixture = os.path.join(
+            os.path.dirname(__file__), "fixtures", "aid_emit_1_rev3_bundle.jsonl"
+        )
+        with open(fixture, encoding="utf-8") as records:
+            line = records.readlines()[line_number]
+        event = json.loads(line)
+
+        process_line(mock_client, line, stats, gap_detector)
+
+        assert stats["written"] == 1 and stats["skipped"] == 0
+        call = mock_client.issue_receipt.call_args
+        assert call.kwargs["entry_type"] == "cpex.decision"
+        assert call.kwargs["agent_id"] == "agent-7"
+        assert call.kwargs["correlation_id"] == "run-4bf92f35"
+        assert call.kwargs["input_hash"] == event["attestation_list"][0]["fingerprint"]["value"]
+        assert event["unmapped"]["cpex.stream"]["stream_id"] == "gw-1:decision"
+
+    def test_rev3_bundle_is_one_dense_stream_across_two_epochs(
+        self, mock_client, stats, gap_detector
+    ):
+        fixture = os.path.join(
+            os.path.dirname(__file__), "fixtures", "aid_emit_1_rev3_bundle.jsonl"
+        )
+        with open(fixture, encoding="utf-8") as records:
+            for line in records:
+                process_line(mock_client, line, stats, gap_detector)
+        assert stats["written"] == 6
+        assert stats["gaps_detected"] == 0
+        stamps = [
+            (c.kwargs["idempotency_key"]) for c in mock_client.issue_receipt.call_args_list
+        ]
+        assert stamps[-1] == "demo-chain-boot-7-e2-000000"
 
     def test_current_decision_shape_is_written_and_stamps_are_checked(
         self, mock_client, stats, gap_detector
@@ -415,8 +536,8 @@ class TestProcessLine:
                 "cpex.decision": {"verdict": "allow", "steps": []},
                 "cpex.stream": {
                     "epoch": 1755000000000000000,
-                    "stream_id": "gw-1/boot-7",
-                    "stream_seq": 7,
+                    "stream_id": "gw-1:decision",
+                    "stream_seq": 0,
                     "emission_seq": 42,
                 },
             }
@@ -426,10 +547,11 @@ class TestProcessLine:
 
         assert stats["written"] == 1
         assert stats["skipped"] == 0
+        assert stats["gaps_detected"] == 0
         call = mock_client.issue_receipt.call_args
         assert call.kwargs["entry_type"] == "cpex.decision"
 
-        event["unmapped"]["cpex.stream"]["stream_seq"] = 9
+        event["unmapped"]["cpex.stream"]["stream_seq"] = 2
         event["unmapped"]["cpex.stream"]["emission_seq"] = 44
         process_line(mock_client, json.dumps(event), stats, gap_detector)
         assert stats["gaps_detected"] == 1
