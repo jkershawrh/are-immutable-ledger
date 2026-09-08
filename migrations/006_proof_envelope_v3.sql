@@ -3,7 +3,8 @@
 -- signature, signer key reference, or attestation report. New writes use V3.
 
 ALTER TABLE are_ledger.ledger_entries
-  ADD COLUMN IF NOT EXISTS hash_version VARCHAR(64);
+  ADD COLUMN IF NOT EXISTS hash_version VARCHAR(64)
+  DEFAULT 'ARE_LEDGER_ENTRY_HASH_V2';
 
 UPDATE are_ledger.ledger_entries
 SET hash_version = 'ARE_LEDGER_ENTRY_HASH_V2'
