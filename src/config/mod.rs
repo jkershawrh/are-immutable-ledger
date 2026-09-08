@@ -18,6 +18,7 @@ pub struct AppConfig {
     pub chain_halt_recovery_seconds: u64,
     pub outbox_max_retries: u32,
     pub verify_interval_seconds: u64,
+    pub verify_max_entries_per_chain: i64,
     pub api_token: Option<String>,
     pub shutdown_token: Option<String>,
 }
@@ -59,6 +60,10 @@ impl AppConfig {
                 })?,
                 Err(_) => 300,
             },
+            verify_max_entries_per_chain: parse_positive_i64(
+                "ARE_LEDGER_VERIFY_MAX_ENTRIES_PER_CHAIN",
+                10_000,
+            )?,
             api_token: env::var("ARE_LEDGER_API_TOKEN").ok(),
             shutdown_token: env::var("ARE_LEDGER_SHUTDOWN_TOKEN").ok(),
         })
@@ -104,6 +109,19 @@ fn parse_nonzero_u64(name: &str, default: u64) -> Result<u64, ConfigError> {
     Ok(value)
 }
 
+fn parse_positive_i64(name: &str, default: i64) -> Result<i64, ConfigError> {
+    let value = match env::var(name) {
+        Ok(raw) => raw
+            .parse::<i64>()
+            .map_err(|_| ConfigError::InvalidInteger(name.to_string()))?,
+        Err(_) => default,
+    };
+    if value <= 0 {
+        return Err(ConfigError::InvalidInteger(name.to_string()));
+    }
+    Ok(value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,6 +145,7 @@ mod tests {
             "ARE_LEDGER_GENESIS_HASH_INPUT",
             "ARE_LEDGER_OUTBOX_MAX_RETRIES",
             "ARE_LEDGER_VERIFY_INTERVAL_SECONDS",
+            "ARE_LEDGER_VERIFY_MAX_ENTRIES_PER_CHAIN",
             "ARE_LEDGER_API_TOKEN",
             "ARE_LEDGER_SHUTDOWN_TOKEN",
         ];
@@ -147,6 +166,7 @@ mod tests {
         assert_eq!(cfg.max_content_size_bytes, 1_048_576);
         assert_eq!(cfg.genesis_hash_input, "ARE_LEDGER_GENESIS");
         assert_eq!(cfg.outbox_http_timeout_seconds, 10);
+        assert_eq!(cfg.verify_max_entries_per_chain, 10_000);
         assert!(cfg.outbox_http_endpoint.is_none());
     }
 
@@ -174,6 +194,16 @@ mod tests {
         clear();
         std::env::set_var("ARE_LEDGER_DB_CONNECTION_STRING", "postgres://db");
         std::env::set_var("ARE_LEDGER_OUTBOX_HTTP_TIMEOUT_SECONDS", "0");
+        let err = AppConfig::from_env().expect_err("must fail");
+        assert!(matches!(err, ConfigError::InvalidInteger(_)));
+    }
+
+    #[test]
+    fn rejects_non_positive_verification_window() {
+        let _guard = env_lock();
+        clear();
+        std::env::set_var("ARE_LEDGER_DB_CONNECTION_STRING", "postgres://db");
+        std::env::set_var("ARE_LEDGER_VERIFY_MAX_ENTRIES_PER_CHAIN", "0");
         let err = AppConfig::from_env().expect_err("must fail");
         assert!(matches!(err, ConfigError::InvalidInteger(_)));
     }

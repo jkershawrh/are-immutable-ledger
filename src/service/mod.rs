@@ -524,7 +524,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
         start_entry_id: Option<Uuid>,
         end_entry_id: Option<Uuid>,
     ) -> Result<VerifyChainOutput, ServiceError> {
-        const BATCH_SIZE: i64 = 500;
+        const BATCH_SIZE: i64 = 50;
 
         let start_position = if let Some(id) = start_entry_id {
             let entry = self.repo.get_entry(id).await.map_err(map_repo)?;
@@ -655,6 +655,49 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
             first_invalid_entry_id: None,
             failure_reason: String::new(),
         })
+    }
+
+    /// Verify a fixed-size tail window of a chain. This is intended for the
+    /// online background verifier; callers requiring a full audit should use
+    /// `verify_chain` explicitly.
+    pub async fn verify_recent_chain(
+        &self,
+        entry_type: &str,
+        max_entries: i64,
+    ) -> Result<VerifyChainOutput, ServiceError> {
+        if max_entries <= 0 {
+            return Err(ServiceError::InvalidArgument(
+                "max_entries must be positive".to_string(),
+            ));
+        }
+        let tip = match self.repo.get_chain_tip(entry_type).await {
+            Ok(tip) => tip,
+            Err(RepositoryError::NotFound) => {
+                return self.verify_chain(entry_type, None, None).await;
+            }
+            Err(error) => return Err(map_repo(error)),
+        };
+        let start_position = (tip.position - max_entries + 1).max(1);
+        let start_entry_id = if start_position == 1 {
+            None
+        } else {
+            self.repo
+                .get_entries_by_type_paged(entry_type, start_position - 1, 1)
+                .await
+                .map_err(map_repo)?
+                .first()
+                .map(|entry| entry.entry_id)
+        };
+        if start_position > 1 && start_entry_id.is_none() {
+            return Ok(VerifyChainOutput {
+                chain_valid: false,
+                entries_checked: 0,
+                first_invalid_entry_id: None,
+                failure_reason: "window_start_not_found".to_string(),
+            });
+        }
+        self.verify_chain(entry_type, start_entry_id, Some(tip.entry_id))
+            .await
     }
 
     pub async fn get_distinct_entry_types(&self) -> Result<Vec<String>, ServiceError> {
@@ -850,6 +893,7 @@ mod tests {
             chain_halt_recovery_seconds: 60,
             outbox_max_retries: 10,
             verify_interval_seconds: 0,
+            verify_max_entries_per_chain: 10_000,
             api_token: None,
             shutdown_token: None,
         })
@@ -1367,6 +1411,45 @@ mod tests {
             .await
             .expect_err("expected not found");
         assert!(matches!(err, ServiceError::NotFound));
+    }
+
+    #[tokio::test]
+    async fn verify_recent_chain_limits_online_work_to_tail_window() {
+        let service = service();
+        for index in 0..7 {
+            service
+                .write_entry(WriteEntryInput {
+                    entry_type: "recent.window".to_string(),
+                    agent_id: "agent-1".to_string(),
+                    content: format!("payload-{index}").into_bytes(),
+                    content_type: "application/json".to_string(),
+                    source_id: "test".to_string(),
+                    correlation_id: None,
+                    idempotency_key: Some(format!("recent-{index}")),
+                    input_hash: None,
+                    writer_signature: None,
+                    signer_key_reference: None,
+                    attestation_report: None,
+                })
+                .await
+                .expect("write");
+        }
+
+        let output = service
+            .verify_recent_chain("recent.window", 3)
+            .await
+            .expect("verify recent window");
+        assert!(output.chain_valid);
+        assert_eq!(output.entries_checked, 3);
+    }
+
+    #[tokio::test]
+    async fn verify_recent_chain_rejects_non_positive_window() {
+        let error = service()
+            .verify_recent_chain("recent.window", 0)
+            .await
+            .expect_err("zero window must fail");
+        assert!(matches!(error, ServiceError::InvalidArgument(_)));
     }
 
     #[tokio::test]

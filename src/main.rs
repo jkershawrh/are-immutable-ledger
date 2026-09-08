@@ -74,9 +74,11 @@ async fn main() -> anyhow::Result<()> {
             Arc::clone(&service),
             Arc::clone(&verification_status),
             Duration::from_secs(config.verify_interval_seconds),
+            config.verify_max_entries_per_chain,
         );
         info!(
             interval_seconds = config.verify_interval_seconds,
+            max_entries_per_chain = config.verify_max_entries_per_chain,
             "background chain verifier started"
         );
     }

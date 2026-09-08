@@ -32,6 +32,7 @@ pub fn spawn_background_verifier<R, P>(
     service: Arc<ImmutableLedgerService<R, P>>,
     status: SharedVerificationStatus,
     interval: Duration,
+    max_entries_per_chain: i64,
 ) where
     R: LedgerRepository + 'static,
     P: EventPublisher + 'static,
@@ -39,7 +40,7 @@ pub fn spawn_background_verifier<R, P>(
     tokio::spawn(async move {
         loop {
             let start = std::time::Instant::now();
-            let chain_results = run_verification(&service).await;
+            let chain_results = run_verification(&service, max_entries_per_chain).await;
             let all_valid = chain_results.iter().all(|r| r.valid);
             let verification = VerificationStatus {
                 all_valid,
@@ -71,6 +72,7 @@ pub fn spawn_background_verifier<R, P>(
 
 async fn run_verification<R: LedgerRepository + 'static, P: EventPublisher + 'static>(
     service: &ImmutableLedgerService<R, P>,
+    max_entries_per_chain: i64,
 ) -> Vec<ChainResult> {
     let entry_types = match service.get_distinct_entry_types().await {
         Ok(types) => types,
@@ -81,7 +83,10 @@ async fn run_verification<R: LedgerRepository + 'static, P: EventPublisher + 'st
     };
     let mut results = Vec::with_capacity(entry_types.len());
     for entry_type in entry_types {
-        let result = match service.verify_chain(&entry_type, None, None).await {
+        let result = match service
+            .verify_recent_chain(&entry_type, max_entries_per_chain)
+            .await
+        {
             Ok(output) => ChainResult {
                 entry_type,
                 valid: output.chain_valid,

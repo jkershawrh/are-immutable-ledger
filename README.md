@@ -99,7 +99,7 @@ Raw gRPC numbers (no REST overhead): WriteEntry p50=1.7ms p99=4.3ms ~520/sec, Ve
 | Concern | Current behavior | Mitigation path |
 |---|---|---|
 | **Advisory lock contention** | Writes to the same `entry_type` serialize via SHA-256-derived advisory locks. Single-chain: 88/s at 100 req/s with 0 errors. | Use distinct `entry_type` per source. Parallel chains scale linearly. Split hot chains by tool or instance. |
-| **Chain verification on long chains** | VerifyChain walks chains in batches of 500 entries (bounded memory). Verification checkpoints not yet implemented. | Add checkpoints for long-chain skip-ahead. Streaming already prevents OOM. |
+| **Chain verification on long chains** | Explicit VerifyChain audits walk the requested range in 50-entry batches. The online verifier checks a bounded recent window per chain. | Run scheduled offline full-chain audits for historical coverage. |
 | **Storage growth** | Each entry stores full content bytes (up to 1 MiB). High-volume systems generate significant storage. | Content compression or content-addressed storage. Raw TTL deletion is unsupported because it breaks retained chain history; see `docs/retention-and-archival.md` for checkpointed archival requirements. |
 | **gRPC message size** | QueryEntries can return large result sets. Default 4MB gRPC limit hit at ~3K entries. | Pagination (already implemented). Client must page through results. |
 
@@ -162,6 +162,7 @@ All configuration is via environment variables:
 | `ARE_LEDGER_CHAIN_MAX_RETRIES` | 10 | Retry attempts per write before chain halt |
 | `ARE_LEDGER_CHAIN_HALT_RECOVERY_SECONDS` | 60 | Auto-recovery timeout for halted chains |
 | `ARE_LEDGER_VERIFY_INTERVAL_SECONDS` | 300 | Background chain verification interval (0 = disabled) |
+| `ARE_LEDGER_VERIFY_MAX_ENTRIES_PER_CHAIN` | 10000 | Maximum recent entries checked per chain by each online verification run |
 | `ARE_LEDGER_OUTBOX_MAX_RETRIES` | 10 | Max publish attempts before marking outbox record FAILED |
 | `ARE_LEDGER_GENESIS_HASH_INPUT` | `ARE_LEDGER_GENESIS` | Seed value for genesis hash of new chains |
 | `ARE_LEDGER_API_TOKEN` | *(unset)* | Bearer token for gRPC auth (disabled when unset) |
