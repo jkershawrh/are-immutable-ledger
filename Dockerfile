@@ -2,7 +2,7 @@ FROM rust:1.90-bookworm AS builder
 
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends protobuf-compiler && rm -rf /var/lib/apt/lists/*
-COPY Cargo.toml build.rs ./
+COPY Cargo.toml Cargo.lock build.rs ./
 COPY proto ./proto
 COPY src ./src
 RUN cargo build --release
@@ -14,4 +14,3 @@ WORKDIR /app
 COPY --from=builder /app/target/release/are-immutable-ledger /usr/local/bin/are-immutable-ledger
 EXPOSE 9092 8080 8083
 ENTRYPOINT ["/usr/local/bin/are-immutable-ledger"]
-
