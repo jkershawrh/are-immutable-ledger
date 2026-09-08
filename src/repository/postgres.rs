@@ -192,18 +192,20 @@ impl LedgerRepository for PostgresLedgerRepository {
             return Err(RepositoryError::Unavailable);
         }
 
-        if let Err(e) = tx
-            .execute(
-                "INSERT INTO are_ledger.ledger_write_outbox (
-                    outbox_id, entry_id, entry_type, payload, status, attempt_count
-                ) VALUES ($1, $2, $3, $4, 'PENDING', 0)",
-                &[&outbox_id, &entry_id, &input.entry_type, &payload_json],
-            )
-            .await
-        {
-            let _ = tx.rollback().await;
-            let _ = e;
-            return Err(RepositoryError::Unavailable);
+        if input.create_outbox {
+            if let Err(e) = tx
+                .execute(
+                    "INSERT INTO are_ledger.ledger_write_outbox (
+                        outbox_id, entry_id, entry_type, payload, status, attempt_count
+                    ) VALUES ($1, $2, $3, $4, 'PENDING', 0)",
+                    &[&outbox_id, &entry_id, &input.entry_type, &payload_json],
+                )
+                .await
+            {
+                let _ = tx.rollback().await;
+                let _ = e;
+                return Err(RepositoryError::Unavailable);
+            }
         }
 
         tx.commit()
@@ -237,7 +239,10 @@ impl LedgerRepository for PostgresLedgerRepository {
             status: OutboxStatus::Pending,
             attempt_count: 0,
         };
-        Ok(WriteResult { entry, outbox })
+        Ok(WriteResult {
+            entry,
+            outbox: input.create_outbox.then_some(outbox),
+        })
     }
 
     async fn get_entry(&self, entry_id: Uuid) -> Result<LedgerEntryRecord, RepositoryError> {

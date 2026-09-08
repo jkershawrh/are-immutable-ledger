@@ -76,7 +76,7 @@ pub enum RepositoryError {
 #[derive(Debug, Clone)]
 pub struct WriteResult {
     pub entry: LedgerEntryRecord,
-    pub outbox: OutboxRecord,
+    pub outbox: Option<OutboxRecord>,
 }
 
 #[derive(Debug, Clone)]
@@ -94,6 +94,7 @@ pub struct EntryWriteInput {
     pub attestation_report: Option<Vec<u8>>,
     pub previous_hash: String,
     pub written_ts: DateTime<Utc>,
+    pub create_outbox: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -272,8 +273,13 @@ impl LedgerRepository for InMemoryLedgerRepository {
                 .idempotency_index
                 .insert((entry.entry_type.clone(), key), entry_id);
         }
-        guard.outbox.insert(outbox_id, outbox.clone());
-        Ok(WriteResult { entry, outbox })
+        if input.create_outbox {
+            guard.outbox.insert(outbox_id, outbox.clone());
+        }
+        Ok(WriteResult {
+            entry,
+            outbox: input.create_outbox.then_some(outbox),
+        })
     }
 
     async fn get_entry(&self, entry_id: Uuid) -> Result<LedgerEntryRecord, RepositoryError> {
@@ -517,6 +523,7 @@ mod tests {
                 attestation_report: None,
                 previous_hash: "genesis".to_string(),
                 written_ts: Utc::now(),
+                create_outbox: true,
             })
             .await
             .expect("write");
@@ -526,11 +533,39 @@ mod tests {
         assert_eq!(tip.position, 1);
         let pending = repo.pending_outbox().await.expect("outbox");
         assert_eq!(pending.len(), 1);
-        repo.mark_outbox_delivered(result.outbox.outbox_id)
+        repo.mark_outbox_delivered(result.outbox.expect("created outbox").outbox_id)
             .await
             .expect("mark delivered");
         let pending_after = repo.pending_outbox().await.expect("outbox");
         assert!(pending_after.is_empty());
+    }
+
+    #[tokio::test]
+    async fn writes_entry_without_outbox_when_delivery_is_disabled() {
+        let repo = InMemoryLedgerRepository::default();
+        let result = repo
+            .write_entry_with_outbox(EntryWriteInput {
+                entry_type: "TYPE.NO.OUTBOX".to_string(),
+                agent_id: "agent".to_string(),
+                content: b"payload".to_vec(),
+                content_type: "application/json".to_string(),
+                source_id: "source".to_string(),
+                correlation_id: None,
+                idempotency_key: None,
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
+                previous_hash: "genesis".to_string(),
+                written_ts: Utc::now(),
+                create_outbox: false,
+            })
+            .await
+            .expect("write");
+
+        assert!(result.outbox.is_none());
+        assert!(repo.pending_outbox().await.expect("outbox").is_empty());
+        assert!(repo.get_entry(result.entry.entry_id).await.is_ok());
     }
 
     #[tokio::test]
@@ -551,6 +586,7 @@ mod tests {
                 attestation_report: None,
                 previous_hash: "genesis".to_string(),
                 written_ts: Utc::now(),
+                create_outbox: true,
             })
             .await
             .expect("first");
@@ -569,6 +605,7 @@ mod tests {
                 attestation_report: None,
                 previous_hash: "wrong-prev".to_string(),
                 written_ts: Utc::now(),
+                create_outbox: true,
             })
             .await
             .expect_err("should fail");

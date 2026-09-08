@@ -216,7 +216,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
         if service.publisher.is_enabled() {
             service.start_outbox_processor();
         } else {
-            warn!("event publisher disabled; outbox records will remain pending");
+            warn!("event publisher disabled; new writes will not create outbox records");
         }
         service
     }
@@ -348,6 +348,7 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
                     attestation_report: input.attestation_report.clone(),
                     previous_hash,
                     written_ts,
+                    create_outbox: self.publisher.is_enabled(),
                 })
                 .await
             {
@@ -865,6 +866,32 @@ mod tests {
     #[test]
     fn noop_event_publisher_reports_disabled() {
         assert!(!NoopEventPublisher.is_enabled());
+    }
+
+    #[tokio::test]
+    async fn disabled_publisher_does_not_create_orphan_outbox_record() {
+        let repo = Arc::new(InMemoryLedgerRepository::default());
+        let service =
+            ImmutableLedgerService::new(Arc::clone(&repo), Arc::new(NoopEventPublisher), config());
+
+        service
+            .write_entry(WriteEntryInput {
+                entry_type: "NO.OUTBOX".to_string(),
+                agent_id: "agent".to_string(),
+                content: b"payload".to_vec(),
+                content_type: "application/json".to_string(),
+                source_id: "source".to_string(),
+                correlation_id: None,
+                idempotency_key: None,
+                input_hash: None,
+                writer_signature: None,
+                signer_key_reference: None,
+                attestation_report: None,
+            })
+            .await
+            .expect("ledger write");
+
+        assert!(repo.pending_outbox().await.expect("outbox").is_empty());
     }
 
     #[test]
