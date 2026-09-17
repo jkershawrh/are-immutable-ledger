@@ -12,6 +12,11 @@ Two integration paths are currently defined:
 - **CPEX / AuthBridge / Praxis:** policy enforcement and guardrail dedup
   via proof receipts
 
+Praxis PPE decision evidence has a more specific preview contract in
+[`praxis-ppe-ocsf-ledger-contract.md`](praxis-ppe-ocsf-ledger-contract.md).
+It uses a separate producer namespace from CPEX and does not claim that a
+native sink is present in a released Praxis build.
+
 The producer repositories own their event and payload schemas. The conventions
 in this contract — `entry_type` namespacing, `correlation_id` threading, proof
 receipt propagation — apply to all integration paths.
@@ -80,6 +85,7 @@ hash chains:
 | `ai.llm-d.gcl.*` | Governed Cognitive Loop | `ai.llm-d.gcl.decision-package.v1` |
 | `fleet.*` | Fleet operations | `fleet.operation.verified` |
 | `cpex.*` | CPEX policy enforcement | `cpex.policy.allow`, `cpex.guardrail.pii_scan` |
+| `praxis.ppe.*` | Praxis Policy Engine | `praxis.ppe.policy.allow.v1`, `praxis.ppe.policy.deny.v1` |
 | `authbridge.*` | AuthBridge sidecar | `authbridge.token.exchanged`, `authbridge.tool.denied` |
 | `openshell.*` | NVIDIA OpenShell | `openshell.http_activity` |
 | `kagenti.*` | Kagenti / OTEL | `kagenti.tool.call` |
@@ -165,8 +171,9 @@ All producers use the same opaque `correlation_id` for one decision lifecycle.
 ### CPEX / AuthBridge correlation
 
 1. AuthBridge runs a guardrail (PII scan) and issues a receipt.
-2. CPEX/Praxis verifies the receipt, skips re-scan, evaluates policy, and
-   issues its own receipt.
+2. The selected enforcement host—CPEX or Praxis PPE—verifies the receipt,
+   skips re-scan only after its local trust checks, evaluates policy, and
+   issues its own namespaced receipt.
 3. Both entries share the same `correlation_id` (request trace ID or session).
 4. An auditor queries by `correlation_id` to see the full enforcement chain.
 
