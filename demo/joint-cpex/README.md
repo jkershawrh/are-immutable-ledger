@@ -61,5 +61,5 @@ The demo scenarios call the ledger REST API directly, simulating what the
 CPEX plugin would do. Praxis is not required to run these scenarios —
 the receipt flow is demonstrated end-to-end without the gateway.
 
-Jeff's cpex-plugin-ocsf-audit is wired and verified (32/32 tests).
+Jeff's CPEX OCSF audit plugin is wired and verified against the audit seam.
 The scenario scripts serve as validation tests for the real integration.
