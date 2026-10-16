@@ -407,6 +407,47 @@ class TestCanonicalization:
         canonicalize_content(event)
         assert event["unmapped"] == original_unmapped
 
+    def test_float_rejected_with_json_path(self):
+        # RFC 8785 (JCS) has no canonical encoding for Python floats, and
+        # this value becomes the ledger input_hash, so refuse rather than
+        # hash an ambiguous encoding (PR #16 review item 1).
+        event = make_decision_event()
+        event["unmapped"]["amount"] = 100.5
+        with pytest.raises(ValueError, match=r"\$\.unmapped\.amount"):
+            canonicalize_content(event)
+
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+    def test_non_finite_float_rejected(self, bad):
+        event = make_decision_event()
+        event["unmapped"]["value"] = bad
+        with pytest.raises(ValueError, match="non-JCS float"):
+            canonicalize_content(event)
+
+    def test_nested_float_in_list_rejected_with_indexed_path(self):
+        event = make_decision_event()
+        event["unmapped"]["readings"] = [1, 2, 3.14]
+        with pytest.raises(ValueError, match=r"\$\.unmapped\.readings\[2\]"):
+            canonicalize_content(event)
+
+    def test_jcs_representable_scalars_still_canonicalize(self):
+        # Guard against over-rejection: integers, strings, booleans, null
+        # and nesting are all inside JCS and must keep hashing.
+        event = make_decision_event()
+        event["unmapped"].update(
+            {
+                "count": 42,
+                "label": "allow",
+                "ok": True,
+                "nothing": None,
+                "nested": {"a": [1, "two", False, None]},
+            }
+        )
+        canonical_bytes, content_hash = canonicalize_content(event)
+        content = json.loads(canonical_bytes)
+        assert content["unmapped"]["count"] == 42
+        assert content["unmapped"]["nested"]["a"] == [1, "two", False, None]
+        assert len(content_hash) == 64
+
 
 # --- End-to-end processing ---
 
