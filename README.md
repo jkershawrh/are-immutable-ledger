@@ -105,6 +105,23 @@ Raw gRPC numbers (no REST overhead): WriteEntry p50=1.7ms p99=4.3ms ~520/sec, Ve
 
 ## Quick Start
 
+### Run the prebuilt container
+
+```bash
+docker pull ghcr.io/jkershawrh/are-immutable-ledger:latest
+
+docker run -d --name are-ledger \
+  -p 9092:9092 -p 8080:8080 -p 8083:8083 \
+  -e ARE_LEDGER_DB_CONNECTION_STRING="host=<pg-host> port=5432 user=<user> password=<password> dbname=ledger sslmode=disable" \
+  ghcr.io/jkershawrh/are-immutable-ledger:latest
+
+curl http://localhost:8080/readyz
+```
+
+The server needs a reachable PostgreSQL database and nothing else — startup verifies the role can INSERT and SELECT but not UPDATE or DELETE. Pin a release tag (e.g. `ghcr.io/jkershawrh/are-immutable-ledger:0.2.0`) for reproducible deployments. Ports: gRPC `9092`, health `8080`, metrics `8083`; see the configuration table below for all `ARE_LEDGER_*` variables.
+
+### Run the demo with compose
+
 ```bash
 cd demo
 make up        # Start ledger + postgres
