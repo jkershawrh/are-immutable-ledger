@@ -206,6 +206,18 @@ python proof-explorer/proof.py drift --agent-id agt-demo-001
 # "POST api.github.com denied by OpenShell but no governance scope evaluation found"
 ```
 
+### Joint pipeline demos
+
+Two demos under `demo/` take the story further:
+
+- **`demo/joint-cpex/`** — CPEX/AuthBridge cross-system scenarios on compose.
+- **`demo/praxis-audit/`** — the real pipeline: an HR copilot makes MCP tool
+  calls through a Praxis gateway (Keycloak identity, PPE policy decisions,
+  session taint), and every decision lands in the ledger as a signed OCSF 6003
+  record. Includes tamper/deletion scenarios that must fail loudly, a live
+  chat walkthrough, and offline verification with per-file hashes. See
+  `demo/praxis-audit/README.md`.
+
 ## Adapters
 
 Thin bridges for existing agentic systems:
@@ -214,7 +226,8 @@ Thin bridges for existing agentic systems:
 |---------|-------------|-------------|---------------------|
 | `adapters/ocsf/` | NVIDIA OpenShell | OCSF v1.7.0 JSONL | `openshell.*` |
 | `adapters/otel/` | Kagenti / any OTEL system | OTLP JSON spans | `kagenti.*` |
-| `adapters/cpex/` | CPEX policy engine | OCSF 6003 audit events | `cpex.*` |
+| `adapters/cpex/` | CPEX policy engine | OCSF 6003 audit events (`aid.*` and legacy `cpex.*`) | `cpex.*` |
+| `adapters/praxis_ppe/` | Praxis PPE policy engine | `praxis.ppe.audit.v1` JSON | `praxis.ppe.*` |
 | `adapters/mlflow/` | MLflow Registry | Webhook + Plugin | `mlflow.*` |
 | Direct gRPC | Any system | Any bytes | Your namespace |
 
@@ -252,11 +265,12 @@ sdks/python/               Python client SDK (WriteEntry, IssueReceipt, VerifyPr
 adapters/ocsf/             OpenShell OCSF event bridge
 adapters/otel/             Kagenti/OTEL span bridge
 adapters/cpex/             CPEX audit seam consumer with gap detection and writer signatures
+adapters/praxis_ppe/       Praxis PPE decision adapter (praxis.ppe.audit.v1 → OCSF 6003)
 adapters/mlflow/             MLflow registry webhook listener + artifact/registry wrappers
 proof-explorer/            Query, verify, timeline, and drift CLI
 api/                       REST gateway for frontend (FastAPI + uvicorn)
 frontend/                  7-act narrative proof explorer (React + Vite + motion)
-demo/                      Self-contained demo with compose (includes joint CPEX/AuthBridge scenarios)
+demo/                      Self-contained demos with compose (joint CPEX/AuthBridge scenarios; praxis-audit runs the real Praxis pipeline)
 scripts/perf/              Latency benchmarks (k6 + Python harness)
 tests/                     Evidence matrix and 146 automated checks
 ```
