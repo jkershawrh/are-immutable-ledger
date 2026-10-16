@@ -102,4 +102,4 @@ Chain halt triggered at: 100 req/s (738 errors, throughput collapsed to 11/s)
 
 4. **Chain verification is now memory-safe.** Batched at 500 entries. No risk of OOM on long chains.
 
-5. **REST gateway adds overhead.** These numbers include ~1-2ms of Flask + HTTP overhead. Production integration should use gRPC directly.
+5. **REST gateway adds overhead.** These numbers include ~1-2ms of async gateway (FastAPI/uvicorn) + HTTP overhead. Production integration should use gRPC directly.

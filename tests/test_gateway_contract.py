@@ -10,6 +10,8 @@ import pytest
 # mode explicitly; tests/test_gateway_auth.py covers the auth behaviour itself.
 os.environ.setdefault("GATEWAY_ALLOW_UNAUTHENTICATED", "true")
 
+from fastapi.testclient import TestClient  # noqa: E402
+
 gateway = pytest.importorskip(
     "api.gateway",
     reason="optional REST gateway dependencies are not installed",
@@ -65,11 +67,27 @@ class _FakeWriteClient:
         )
 
 
+class _FakeAuditClient:
+    def __init__(self):
+        first = _entry()
+        second = _entry()
+        second.entry_id = "entry-2"
+        second.entry_type = "kagenti.policy.denied"
+        second.source_id = "urn:kagenti:gateway"
+        second.chain_position = 4
+        self.entries = [first, second]
+        self.query_kwargs = None
+
+    def query_page(self, **kwargs):
+        self.query_kwargs = kwargs
+        return self.entries, "", len(self.entries)
+
+
 def test_entries_query_forwards_unix_millisecond_window_and_input_hash(monkeypatch):
     ledger = _FakeClient()
     monkeypatch.setattr(gateway, "get_client", lambda: ledger)
 
-    response = gateway.app.test_client().get(
+    response = TestClient(gateway.app).get(
         "/api/entries?correlation_id=corr-1&from_ts=100&to_ts=200"
     )
 
@@ -82,7 +100,7 @@ def test_entries_query_forwards_unix_millisecond_window_and_input_hash(monkeypat
         "to_ts": 200,
     }
     assert ledger.closed is False  # singleton client is reused, not closed per-request
-    body = response.get_json()
+    body = response.json()
     assert body["entries"][0]["input_hash"] == "c" * 64
     assert body["entries"][0]["hash_version"] == "ARE_LEDGER_ENTRY_HASH_V3"
     assert body["next_page_token"] == "next-page"
@@ -93,7 +111,7 @@ def test_entries_query_rejects_non_integer_time_window(monkeypatch):
     ledger = _FakeClient()
     monkeypatch.setattr(gateway, "get_client", lambda: ledger)
 
-    response = gateway.app.test_client().get("/api/entries?from_ts=not-a-number")
+    response = TestClient(gateway.app).get("/api/entries?from_ts=not-a-number")
 
     assert response.status_code == 400
     assert ledger.query_kwargs is None
@@ -104,7 +122,7 @@ def test_write_serializes_structured_json_content(monkeypatch):
     ledger = _FakeWriteClient()
     monkeypatch.setattr(gateway, "get_client", lambda: ledger)
 
-    response = gateway.app.test_client().post(
+    response = TestClient(gateway.app).post(
         "/api/entries",
         json={
             "entry_type": "release.validation.v1",
@@ -115,3 +133,37 @@ def test_write_serializes_structured_json_content(monkeypatch):
 
     assert response.status_code == 201
     assert ledger.write_kwargs["content"] == '{"check":"contract","passed":true}'
+
+
+def test_summary_preserves_filters_and_truncation_contract(monkeypatch):
+    ledger = _FakeAuditClient()
+    monkeypatch.setattr(gateway, "get_client", lambda: ledger)
+
+    response = TestClient(gateway.app).get(
+        "/api/summary?entry_type=fleet.operation.verified&from_ts=100&page_size=2"
+    )
+
+    assert response.status_code == 200
+    assert ledger.query_kwargs == {
+        "page_size": 2,
+        "page_token": "",
+        "entry_type": "fleet.operation.verified",
+        "from_ts": 100,
+    }
+    assert response.json()["truncated"] is True
+
+
+def test_chains_and_timeline_keep_legacy_response_shapes(monkeypatch):
+    ledger = _FakeAuditClient()
+    monkeypatch.setattr(gateway, "get_client", lambda: ledger)
+    client = TestClient(gateway.app)
+
+    chains = client.get("/api/chains").json()
+    assert isinstance(chains, dict)
+    assert chains["chains"][0]["source"] == "unknown"
+    assert chains["chains"][1]["source"] == "kagenti"
+
+    timeline = client.get("/api/timeline").json()
+    assert timeline["cross_links"] == {
+        "corr-1": ["entry-1", "entry-2"],
+    }

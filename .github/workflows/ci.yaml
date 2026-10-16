@@ -38,7 +38,9 @@ jobs:
           cache: pip
           cache-dependency-path: api/requirements.txt
       - name: Install dependencies
-        run: python -m pip install -r api/requirements.txt pytest pip-audit
+        # Starlette's TestClient uses httpx at test time only, so it stays out
+        # of the runtime image.
+        run: python -m pip install -r api/requirements.txt pytest pip-audit httpx
       - name: Test gateway contract
         env:
           # The gateway refuses to start unauthenticated unless told to. These
