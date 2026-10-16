@@ -16,10 +16,17 @@
 # the same pinned commit. Both sides then share one praxis-policy-core and
 # the sink's `AuditHandler` is the one the executor calls.
 #
-# The pin is praxis-proxy/policy main (de93b87, the #171 merge) plus one fix
-# on Levaj2000/policy: under `dispatch: policy` the APL visitor rejected a
-# hookless audit sink as "can never run", so the sink could not load beside
-# any route. Repin to praxis-proxy/policy once that fix lands upstream.
+# The pin is Levaj2000/policy @ 3b72d5f: praxis-proxy/policy main (de93b87,
+# the #171 merge) plus the hookless-audit-sink dispatch fix, which merged
+# upstream as #210 (04bae9e7). The upstream repin is blocked, not forgotten:
+# upstream main prepped the policy crates as v0.5.0 before #210 landed, and
+# the demo server is praxis-proxy 0.7.4 (crates.io), which requires the 0.4.x
+# policy line — pinning 04bae9e7 splits praxis-policy-core across 0.4.1 and
+# 0.5.0, and the sink's AuditHandler stops being the trait the engine calls.
+# Repin — and drop this patch block entirely, if v0.5.0 ships the sink to
+# crates.io — once a praxis-proxy server release supports the 0.5.x policy
+# line. The same move picks up rustls 0.23.46 (RUSTSEC-2026-0349); the 0.4.x
+# line resolves 0.23.45.
 
 [package]
 name = "praxis-audit-gateway"

@@ -135,7 +135,13 @@ around here; the first needs an upstream fix.
    names `ocsf-audit`, so it can never run", and naming it in `run()` denied
    every request. Fixed in
    [Levaj2000/policy#2](https://github.com/Levaj2000/policy/pull/2), which
-   `gateway/Cargo.toml` pins until it lands in praxis-proxy/policy.
+   merged upstream as
+   [praxis-proxy/policy#210](https://github.com/praxis-proxy/policy/pull/210).
+   `gateway/Cargo.toml` still pins the fork copy: upstream main is now the
+   v0.5.0 policy line, incompatible with the demo's praxis-proxy 0.7.4
+   server, so the repin waits for a server release aligned with policy
+   0.5.x — the same move that picks up rustls 0.23.46
+   (RUSTSEC-2026-0349).
 2. **No keyed content digests through Praxis.** Praxis 0.7.4 registers no
    secret provider backends with the engine it builds, so
    `content_provenance_key` cannot name a secret. The demo uses `unkeyed`
