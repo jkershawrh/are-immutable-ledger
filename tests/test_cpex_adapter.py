@@ -646,3 +646,254 @@ class TestProcessLine:
         input_hash = call.kwargs["input_hash"]
         expected = hashlib.sha256(content_bytes).hexdigest()
         assert input_hash == expected
+
+
+# --- Epoch boundaries (CPEX restart) ---
+
+
+EPOCH_A = 1_755_648_000_000_000_000
+EPOCH_B = 1_755_649_000_000_000_000
+
+
+class TestStreamStampExtraction:
+    def test_stamps_read_from_unmapped_cpex_stream(self):
+        event = {
+            "unmapped": {
+                "cpex.stream": {
+                    "epoch": EPOCH_A,
+                    "stream_id": "gw-1/boot-7",
+                    "stream_seq": 41,
+                    "emission_seq": 41,
+                }
+            }
+        }
+        assert extract_stream_stamps(event) == (EPOCH_A, "gw-1/boot-7", 41, 41)
+
+    def test_falls_back_to_top_level_stamps(self):
+        event = {"stream_id": "dec-boot-001", "stream_seq": 3, "emission_seq": 9}
+        assert extract_stream_stamps(event) == (None, "dec-boot-001", 3, 9)
+
+    def test_nested_stamps_win_over_top_level(self):
+        event = {
+            "stream_id": "dec-boot-001",
+            "stream_seq": 3,
+            "unmapped": {
+                "cpex.stream": {
+                    "epoch": EPOCH_A,
+                    "stream_id": "gw-1/boot-7",
+                    "stream_seq": 41,
+                    "emission_seq": 41,
+                }
+            },
+        }
+        assert extract_stream_stamps(event) == (EPOCH_A, "gw-1/boot-7", 41, 41)
+
+
+class TestEpochBoundaries:
+    def test_restart_resetting_stream_seq_is_not_a_gap(self, gap_detector):
+        gap_detector.check("gw-1", 42, 42, epoch=EPOCH_A)
+        gap_detector.check("gw-1", 43, 43, epoch=EPOCH_A)
+        alerts = gap_detector.check("gw-1", 0, 44, epoch=EPOCH_B)
+        assert alerts == []
+
+    def test_restart_is_reported_as_an_epoch_change_note(self, gap_detector):
+        gap_detector.check("gw-1", 43, 43, epoch=EPOCH_A)
+        gap_detector.pop_notes()
+        gap_detector.check("gw-1", 0, 44, epoch=EPOCH_B)
+        notes = gap_detector.pop_notes()
+        assert len(notes) == 1
+        assert "EPOCH CHANGE in gw-1" in notes[0]
+        assert "not a gap" in notes[0]
+
+    def test_notes_are_drained_once(self, gap_detector):
+        gap_detector.check("gw-1", 43, 43, epoch=EPOCH_A)
+        gap_detector.check("gw-1", 1, 44, epoch=EPOCH_B)
+        assert len(gap_detector.pop_notes()) == 1
+        assert gap_detector.pop_notes() == []
+
+    def test_first_record_of_a_stream_notes_nothing(self, gap_detector):
+        gap_detector.check("gw-1", 41, 41, epoch=EPOCH_A)
+        assert gap_detector.pop_notes() == []
+
+    def test_gap_within_one_epoch_is_still_detected(self, gap_detector):
+        gap_detector.check("gw-1", 41, 41, epoch=EPOCH_A)
+        alerts = gap_detector.check("gw-1", 43, 43, epoch=EPOCH_A)
+        assert len(alerts) == 1
+        assert "expected stream_seq 42" in alerts[0]
+
+    def test_continuity_resumes_within_the_new_epoch(self, gap_detector):
+        gap_detector.check("gw-1", 43, 43, epoch=EPOCH_A)
+        gap_detector.check("gw-1", 1, 44, epoch=EPOCH_B)
+        assert gap_detector.check("gw-1", 2, 45, epoch=EPOCH_B) == []
+        alerts = gap_detector.check("gw-1", 4, 46, epoch=EPOCH_B)
+        assert len(alerts) == 1
+        assert "expected stream_seq 3" in alerts[0]
+
+    def test_epochs_do_not_share_a_counter(self, gap_detector):
+        gap_detector.check("gw-1", 7, 1, epoch=EPOCH_A)
+        gap_detector.check("gw-1", 7, 2, epoch=EPOCH_B)
+        assert gap_detector.check("gw-1", 8, 3, epoch=EPOCH_B) == []
+
+    def test_restart_does_not_increment_gap_stats(self, mock_client, stats, gap_detector):
+        def event_with_stamps(uid, epoch, seq, emission):
+            event = make_decision_event()
+            event["metadata"]["uid"] = uid
+            event["unmapped"]["cpex.stream"] = {
+                "epoch": epoch,
+                "stream_id": "gw-1/boot-7",
+                "stream_seq": seq,
+                "emission_seq": emission,
+            }
+            return json.dumps(event)
+
+        process_line(mock_client, event_with_stamps("r-1", EPOCH_A, 0, 43), stats, gap_detector)
+        process_line(mock_client, event_with_stamps("r-2", EPOCH_B, 0, 44), stats, gap_detector)
+        assert stats["gaps_detected"] == 0
+        assert stats["written"] == 2
+
+
+# --- Record-type detection on the real record shape ---
+
+
+class TestRecordTypeDiscriminator:
+    def test_decision_record_detected_by_unmapped_key(self):
+        event = {"unmapped": {"cpex.decision": {"verdict": "allow", "steps": []}}}
+        assert detect_record_type(event) == "decision"
+
+    def test_effect_record_detected_by_unmapped_key(self):
+        event = {"unmapped": {"cpex.effect": {}}}
+        assert detect_record_type(event) == "effect"
+
+    def test_gateway_boot_stream_id_no_longer_skipped(self):
+        event = {
+            "class_uid": 6003,
+            "unmapped": {
+                "cpex.decision": {"verdict": "deny", "steps": []},
+                "cpex.stream": {
+                    "epoch": EPOCH_A,
+                    "stream_id": "gw-1/boot-7",
+                    "stream_seq": 41,
+                    "emission_seq": 41,
+                },
+            },
+        }
+        assert detect_record_type(event) == "decision"
+
+    def test_unmapped_key_wins_over_stream_prefix(self):
+        event = {
+            "stream_id": "eff-boot-001",
+            "unmapped": {"cpex.decision": {"verdict": "allow", "steps": []}},
+        }
+        assert detect_record_type(event) == "decision"
+
+    def test_top_level_prefix_still_works(self):
+        assert detect_record_type({"stream_id": "dec-boot-001"}) == "decision"
+        assert detect_record_type({"stream_id": "eff-boot-001"}) == "effect"
+
+    def test_unrelated_record_is_skipped(self):
+        event = {"class_uid": 6003, "unmapped": {"cmf.security.labels": ["PII"]}}
+        assert detect_record_type(event) is None
+
+    def test_non_dict_unmapped_does_not_raise(self):
+        assert detect_record_type({"unmapped": "not-an-object"}) is None
+
+    def test_real_shaped_decision_record_is_written(self, mock_client, stats, gap_detector):
+        event = {
+            "class_uid": 6003,
+            "class_name": "AI Operation",
+            "metadata": {"uid": "rec-1", "version": "1.9.0"},
+            "ai_agent": {"uid": "agent-7"},
+            "unmapped": {
+                "cpex.decision": {"verdict": "allow", "steps": []},
+                "cpex.stream": {
+                    "epoch": EPOCH_A,
+                    "stream_id": "gw-1/boot-7",
+                    "stream_seq": 41,
+                    "emission_seq": 41,
+                },
+            },
+        }
+        process_line(mock_client, json.dumps(event), stats, gap_detector)
+        assert stats["written"] == 1
+        assert stats["skipped"] == 0
+        assert mock_client.issue_receipt.call_args.kwargs["entry_type"] == "cpex.decision"
+
+
+
+
+# --- AID-EMIT-1 1.2.0-draft keys (aid.*), as the merged ocsf-audit plugin emits ---
+
+
+def make_aid_decision(stream_seq, epoch=EPOCH_A, stream_id="gw-1:decision"):
+    return {
+        "class_uid": 6003,
+        "metadata": {"uid": f"rec-{stream_seq}", "version": "1.9.0"},
+        "ai_agent": {"uid": "agent-7"},
+        "unmapped": {
+            "aid.decision": {"verdict": "allow", "steps": []},
+            "aid.stream": {
+                "epoch": epoch,
+                "stream_id": stream_id,
+                "stream_seq": stream_seq,
+                "emission_seq": stream_seq,
+            },
+        },
+    }
+
+
+class TestAidKeys:
+    def test_decision_record_detected_by_aid_key(self):
+        assert detect_record_type(make_aid_decision(0)) == "decision"
+
+    def test_effect_record_detected_by_aid_key(self):
+        assert detect_record_type({"unmapped": {"aid.effect": {}}}) == "effect"
+
+    def test_stamps_read_from_aid_stream(self):
+        assert extract_stream_stamps(make_aid_decision(41)) == (
+            EPOCH_A,
+            "gw-1:decision",
+            41,
+            41,
+        )
+
+    def test_aid_stream_wins_over_cpex_stream(self):
+        event = make_aid_decision(41)
+        event["unmapped"]["cpex.stream"] = {
+            "epoch": EPOCH_B,
+            "stream_id": "stale",
+            "stream_seq": 3,
+            "emission_seq": 3,
+        }
+        assert extract_stream_stamps(event) == (EPOCH_A, "gw-1:decision", 41, 41)
+
+    def test_aid_record_is_written_with_the_existing_entry_type(
+        self, mock_client, stats, gap_detector
+    ):
+        process_line(mock_client, json.dumps(make_aid_decision(0)), stats, gap_detector)
+        assert stats["written"] == 1
+        assert stats["skipped"] == 0
+        assert mock_client.issue_receipt.call_args.kwargs["entry_type"] == "cpex.decision"
+
+    def test_gap_detected_on_aid_stream(self, mock_client, stats, gap_detector):
+        for seq in (0, 1, 3):
+            process_line(mock_client, json.dumps(make_aid_decision(seq)), stats, gap_detector)
+        assert stats["gaps_detected"] == 1
+
+    def test_restart_on_aid_stream_is_not_a_gap(self, mock_client, stats, gap_detector):
+        for seq in (0, 1, 2):
+            process_line(mock_client, json.dumps(make_aid_decision(seq)), stats, gap_detector)
+        restarted = make_aid_decision(0, epoch=EPOCH_B)
+        process_line(mock_client, json.dumps(restarted), stats, gap_detector)
+        assert stats["gaps_detected"] == 0
+        assert stats["written"] == 4
+
+
+class TestEmissionOrderAcrossEpochs:
+    def test_emission_seq_reset_by_a_restart_is_not_an_ordering_violation(self, gap_detector):
+        assert gap_detector.check("gw-1:decision", 0, 5, epoch=EPOCH_A) == []
+        assert gap_detector.check("gw-1:decision", 0, 0, epoch=EPOCH_B) == []
+
+    def test_backwards_emission_seq_within_an_epoch_is_still_flagged(self, gap_detector):
+        gap_detector.check("gw-1:decision", 0, 4, epoch=EPOCH_A)
+        alerts = gap_detector.check("gw-1:effect", 0, 3, epoch=EPOCH_A)
+        assert any(a.startswith("ORDERING") for a in alerts)

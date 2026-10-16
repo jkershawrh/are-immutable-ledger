@@ -21,12 +21,16 @@ including the head of every epoch, which opens at stream_seq 0 — epoch
 ordering per stream_id, and emission_seq monotonicity. Alerts on gaps but
 still writes records.
 
+The plugin's records carry these stamps under unmapped["aid.stream"]
+(AID-EMIT-1 1.2.0-draft renamed the keys from cpex.* to aid.*; the
+pre-rename keys are still read).
+
 Stream ids are opaque to the adapter. A CPEX host that sets
 plugin_settings.audit_stream_namespace stamps them as "<namespace>:<kind>"
 (e.g. "gw-1:decision" / "gw-1:effect"); the namespace may itself contain
 ":", so anything that needs the kind back splits on the LAST colon
 (rsplit(":", 1)). Nothing here does — entry_type comes from the record's
-own content (unmapped."cpex.decision" / "cpex.effect"), never from the
+own content (unmapped."aid.decision" / "aid.effect", or the pre-rename cpex.* keys), never from the
 stream id.
 
 Usage:
@@ -55,6 +59,19 @@ LEGACY_STREAM_PREFIX_MAP = {
     "eff-": "effect",
 }
 
+# Record-type discriminators, in the plugin's OCSF records. The decision
+# sink inserts unmapped["aid.decision"] on every finalized verdict;
+# unmapped["aid.effect"] is reserved for AuditHandler::on_effect, which
+# has not landed yet. AID-EMIT-1 1.2.0-draft renamed the format's keys
+# from cpex.* to aid.*; the cpex.* names are kept for records written
+# before the rename.
+RECORD_TYPE_KEYS = (
+    ("aid.decision", "decision"),
+    ("aid.effect", "effect"),
+    ("cpex.decision", "decision"),
+    ("cpex.effect", "effect"),
+)
+
 UNMAPPED_ENVELOPE_KEYS = ("signature_b64", "signature_key_id")
 
 # The first stream_seq a host emits in an epoch. AID-EMIT-1 section 7 defines
@@ -63,13 +80,41 @@ UNMAPPED_ENVELOPE_KEYS = ("signature_b64", "signature_key_id")
 STREAM_HEAD_SEQ = 0
 
 
+# Current key first, then the pre-rename key.
+STREAM_STAMP_KEYS = ("aid.stream", "cpex.stream")
+
+
+def extract_stream_stamps(event):
+    """Return (epoch, stream_id, stream_seq, emission_seq).
+
+    The plugin's OCSF records carry the seam's completeness/ordering stamps
+    under unmapped["aid.stream"] (unmapped["cpex.stream"] before the
+    AID-EMIT-1 key rename), inside the hashed bytes. Older seam output
+    carried them at the top level, so fall back to that.
+    """
+    unmapped = event.get("unmapped", {})
+    stamps = None
+    for key in STREAM_STAMP_KEYS:
+        stamps = unmapped.get(key)
+        if isinstance(stamps, dict):
+            break
+    if not isinstance(stamps, dict):
+        stamps = event
+    return (
+        stamps.get("epoch"),
+        stamps.get("stream_id", ""),
+        stamps.get("stream_seq"),
+        stamps.get("emission_seq"),
+    )
+
+
 class GapDetector:
     """Tracks stream_seq continuity per (epoch, stream_id), the head of each
     epoch, epoch ordering per stream_id, and emission_seq monotonicity.
 
     Density is a per-(epoch, stream_id) property: a producer restart opens a
     new epoch and legitimately resets the counter, so a new epoch is never a
-    gap. Two things ARE alerted that a tail-only check cannot see:
+    gap; it is reported as a note (pop_notes) instead. Two things ARE alerted that a tail-only check cannot see:
 
     * The head of every epoch. An epoch opens at stream_seq 0, so a first
       record above 0 means records 0..n-1 never arrived. The record emitted
@@ -93,10 +138,26 @@ class GapDetector:
         self._last_seq = {}
         self._newest_epoch = {}
         self._last_emission_seq = {}
+        self._last_epoch = {}
+        self._notes = []
+
+    def pop_notes(self):
+        """Drain informational notes (epoch changes) recorded since the last call."""
+        notes, self._notes = self._notes, []
+        return notes
 
     def check(self, stream_id, stream_seq, emission_seq, epoch=None):
         alerts = []
         stream_key = (epoch, stream_id)
+
+        previous_epoch = self._last_epoch.get(stream_id, epoch)
+        if previous_epoch != epoch:
+            self._notes.append(
+                f"EPOCH CHANGE in {stream_id}: {previous_epoch} -> {epoch}; "
+                f"stream_seq resets to {stream_seq} (expected, not a gap)"
+            )
+        self._last_epoch[stream_id] = epoch
+
 
         if stream_key in self._last_seq:
             expected = self._last_seq[stream_key] + 1
@@ -133,44 +194,31 @@ class GapDetector:
         if emission_seq is not None:
             self._last_emission_seq[epoch] = emission_seq
 
+
         return alerts
 
 
 def detect_record_type(event):
-    unmapped = event.get("unmapped", {})
-    if isinstance(unmapped, dict):
-        if "cpex.decision" in unmapped:
-            return "decision"
-        if "cpex.effect" in unmapped:
-            return "effect"
+    """Classify a record as a decision or an effect, or None to skip it.
 
-    # Accept the pre-AID-EMIT-1 shape for offline replay compatibility.
+    The plugin's OCSF records are keyed on the unmapped object they carry:
+    a finalized verdict from the decision sink brings unmapped["aid.decision"]
+    (unmapped["cpex.decision"] before the key rename). Their stream_id is a
+    namespaced id (e.g. "gw-1:decision") nested under unmapped["aid.stream"], so the dec-/eff- prefix convention below only
+    identifies older seam output that carried a top-level stream_id.
+    """
+    unmapped = event.get("unmapped")
+    if isinstance(unmapped, dict):
+        for key, record_type in RECORD_TYPE_KEYS:
+            if key in unmapped:
+                return record_type
+
     stream_id = event.get("stream_id", "")
     for prefix, record_type in LEGACY_STREAM_PREFIX_MAP.items():
         if stream_id.startswith(prefix):
             return record_type
     return None
 
-
-def extract_stream_stamps(event):
-    """Extract AID-EMIT-1 section 7 stamps, with legacy fallback."""
-    unmapped = event.get("unmapped", {})
-    if isinstance(unmapped, dict):
-        stream = unmapped.get("cpex.stream")
-        if isinstance(stream, dict):
-            return (
-                stream.get("epoch"),
-                stream.get("stream_id", ""),
-                stream.get("stream_seq"),
-                stream.get("emission_seq"),
-            )
-
-    return (
-        event.get("epoch"),
-        event.get("stream_id", ""),
-        event.get("stream_seq"),
-        event.get("emission_seq"),
-    )
 
 
 def extract_agent_id(event):
@@ -208,6 +256,32 @@ def extract_signer_key_reference(event):
     return unmapped.get("signature_key_id", "")
 
 
+def _reject_non_jcs_scalars(value, path="$"):
+    """Reject values RFC 8785 (JCS) cannot represent.
+
+    JCS covers objects, arrays, strings, integers, booleans and null only.
+    Python floats (including NaN/Infinity and integral floats like 1.0) have
+    no canonical JCS encoding, and ``json.dumps`` would silently emit them
+    (``1.0``, ``NaN``), so refuse them instead of hashing an ambiguous
+    encoding. This value becomes the ledger ``input_hash``.
+    """
+    if isinstance(value, bool) or value is None:
+        return
+    if isinstance(value, float):
+        raise ValueError(f"non-JCS float at {path}: {value!r}")
+    if isinstance(value, (int, str)):
+        return
+    if isinstance(value, dict):
+        for k, v in value.items():
+            _reject_non_jcs_scalars(v, f"{path}.{k}")
+        return
+    if isinstance(value, (list, tuple)):
+        for i, v in enumerate(value):
+            _reject_non_jcs_scalars(v, f"{path}[{i}]")
+        return
+    raise ValueError(f"non-JCS value at {path}: {type(value).__name__}")
+
+
 def canonicalize_content(event):
     """Return the AID-EMIT-1 covered bytes and their SHA-256 fingerprint.
 
@@ -216,6 +290,7 @@ def canonicalize_content(event):
     signature fields under ``unmapped``. Chain identity and position fields,
     including ``prev_event``, remain covered.
     """
+    _reject_non_jcs_scalars(event)
     content = copy.deepcopy(event)
 
     attestations = content.get("attestation_list")
@@ -235,11 +310,11 @@ def canonicalize_content(event):
     elif unmapped != event.get("unmapped", {}):
         content["unmapped"] = unmapped
 
-    try:
-        from json_canonicalize import canonicalize
-        canonical = canonicalize(content)
-    except ImportError:
-        canonical = json.dumps(content, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    # Sorted keys, no whitespace, raw UTF-8: matches RFC 8785 (JCS) for the
+    # OCSF payloads the sink emits (strings, integers, nested objects).
+    # Non-JCS scalars (floats, NaN/Infinity) are rejected above, since this
+    # value becomes the ledger input_hash.
+    canonical = json.dumps(content, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
     if isinstance(canonical, str):
         canonical_bytes = canonical.encode("utf-8")
@@ -269,7 +344,9 @@ def process_line(client, line, stats, gap_detector, *, write_only=False):
     epoch, stream_id, stream_seq, emission_seq = extract_stream_stamps(event)
 
     if stream_id and stream_seq is not None:
-        gaps = gap_detector.check(stream_id, stream_seq, emission_seq, epoch)
+        gaps = gap_detector.check(stream_id, stream_seq, emission_seq, epoch=epoch)
+        for note in gap_detector.pop_notes():
+            print(f"  NOTE: {note}", file=sys.stderr)
         for gap_msg in gaps:
             print(f"  WARNING: {gap_msg}", file=sys.stderr)
             stats["gaps_detected"] += 1
