@@ -1,0 +1,567 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Rate": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Point Estimate",
+          "type": "number"
+        },
+        "passed": {
+          "minimum": 0,
+          "title": "Passed",
+          "type": "integer"
+        },
+        "total": {
+          "minimum": 1,
+          "title": "Total",
+          "type": "integer"
+        },
+        "wilson_95": {
+          "items": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Wilson 95% Interval",
+          "type": "array"
+        }
+      },
+      "required": [
+        "value",
+        "passed",
+        "total",
+        "wilson_95"
+      ],
+      "title": "Rate",
+      "type": "object"
+    },
+    "PassAllK": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Point Estimate",
+          "type": "number"
+        },
+        "passed": {
+          "minimum": 0,
+          "title": "Cases Passing All K",
+          "type": "integer"
+        },
+        "total": {
+          "minimum": 1,
+          "title": "Cases",
+          "type": "integer"
+        },
+        "k": {
+          "minimum": 1,
+          "title": "Trials Per Case",
+          "type": "integer"
+        },
+        "wilson_95": {
+          "items": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Wilson 95% Interval",
+          "type": "array"
+        }
+      },
+      "required": [
+        "value",
+        "passed",
+        "total",
+        "k",
+        "wilson_95"
+      ],
+      "title": "PassAllK",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "fabric.evaluation-card/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "card_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Card Sha256",
+      "type": "string"
+    },
+    "issued_at": {
+      "minLength": 1,
+      "title": "Issued At",
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "workload-pipeline",
+        "portable-pilot"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "construct": {
+      "additionalProperties": false,
+      "properties": {
+        "statement": {
+          "minLength": 1,
+          "title": "Construct Statement",
+          "type": "string"
+        },
+        "metric": {
+          "minLength": 1,
+          "title": "Metric",
+          "type": "string"
+        },
+        "gaming_analysis": {
+          "minLength": 1,
+          "title": "Gaming Analysis",
+          "type": "string"
+        },
+        "construct_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Construct Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "statement",
+        "metric",
+        "gaming_analysis",
+        "construct_sha256"
+      ],
+      "title": "Construct",
+      "type": "object"
+    },
+    "evaluation": {
+      "additionalProperties": false,
+      "properties": {
+        "source_schema_version": {
+          "minLength": 1,
+          "title": "Source Schema Version",
+          "type": "string"
+        },
+        "source_id": {
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "binding_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Binding Sha256",
+          "type": "string"
+        },
+        "measured_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Measured Sha256",
+          "type": "string"
+        },
+        "split": {
+          "minLength": 1,
+          "title": "Split",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_schema_version",
+        "source_id",
+        "binding_sha256",
+        "measured_sha256",
+        "split"
+      ],
+      "title": "Evaluation",
+      "type": "object"
+    },
+    "systems": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "system_id": {
+            "minLength": 1,
+            "title": "System Id",
+            "type": "string"
+          },
+          "scaffold": {
+            "additionalProperties": false,
+            "properties": {
+              "adapter": {
+                "minLength": 1,
+                "title": "Adapter",
+                "type": "string"
+              },
+              "procedure_revision": {
+                "minLength": 1,
+                "title": "Procedure Revision",
+                "type": "string"
+              }
+            },
+            "required": [
+              "adapter",
+              "procedure_revision"
+            ],
+            "title": "Scaffold",
+            "type": "object"
+          },
+          "model_binding": {
+            "additionalProperties": false,
+            "properties": {
+              "candidate_kind": {
+                "minLength": 1,
+                "title": "Candidate Kind",
+                "type": "string"
+              },
+              "profile_sha256": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Profile Sha256",
+                "type": "string"
+              }
+            },
+            "required": [
+              "candidate_kind",
+              "profile_sha256"
+            ],
+            "title": "Model Binding",
+            "type": "object"
+          },
+          "evidence_label": {
+            "enum": [
+              "LIVE",
+              "REHEARSAL",
+              "OFFLINE",
+              "MIXED"
+            ],
+            "title": "Evidence Label",
+            "type": "string"
+          },
+          "repetition": {
+            "additionalProperties": false,
+            "properties": {
+              "trials_per_case": {
+                "minimum": 1,
+                "title": "Trials Per Case",
+                "type": "integer"
+              },
+              "case_count": {
+                "minimum": 1,
+                "title": "Case Count",
+                "type": "integer"
+              },
+              "total_trials": {
+                "minimum": 1,
+                "title": "Total Trials",
+                "type": "integer"
+              },
+              "incomplete_trials": {
+                "minimum": 0,
+                "title": "Incomplete Trials",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "trials_per_case",
+              "case_count",
+              "total_trials",
+              "incomplete_trials"
+            ],
+            "title": "Repetition",
+            "type": "object"
+          },
+          "single_attempt_rate": {
+            "$ref": "#/$defs/Rate"
+          },
+          "pass_at_k": {
+            "$ref": "#/$defs/Rate"
+          },
+          "pass_all_k": {
+            "$ref": "#/$defs/PassAllK"
+          },
+          "reliability_claimable": {
+            "title": "Reliability Claimable",
+            "type": "boolean"
+          },
+          "reliability_note": {
+            "minLength": 1,
+            "title": "Reliability Note",
+            "type": "string"
+          },
+          "performance": {
+            "additionalProperties": false,
+            "properties": {
+              "latency": {
+                "additionalProperties": false,
+                "properties": {
+                  "unit": {
+                    "enum": [
+                      "seconds",
+                      "milliseconds"
+                    ],
+                    "title": "Unit",
+                    "type": "string"
+                  },
+                  "mean": {
+                    "minimum": 0,
+                    "title": "Mean",
+                    "type": "number"
+                  },
+                  "max": {
+                    "minimum": 0,
+                    "title": "Max",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "unit",
+                  "mean",
+                  "max"
+                ],
+                "title": "Latency",
+                "type": "object"
+              },
+              "model_calls": {
+                "minimum": 0,
+                "title": "Model Calls",
+                "type": "integer"
+              },
+              "deadline": {
+                "additionalProperties": false,
+                "properties": {
+                  "unit": {
+                    "enum": [
+                      "seconds",
+                      "milliseconds"
+                    ],
+                    "title": "Unit",
+                    "type": "string"
+                  },
+                  "value": {
+                    "exclusiveMinimum": 0,
+                    "title": "Value",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "unit",
+                  "value"
+                ],
+                "title": "Deadline",
+                "type": "object"
+              }
+            },
+            "required": [
+              "latency",
+              "model_calls",
+              "deadline"
+            ],
+            "title": "Performance",
+            "type": "object"
+          },
+          "gates": {
+            "additionalProperties": {
+              "enum": [
+                "RED",
+                "AMBER",
+                "GREEN"
+              ]
+            },
+            "title": "Gates",
+            "type": "object"
+          },
+          "color": {
+            "enum": [
+              "RED",
+              "AMBER",
+              "GREEN"
+            ],
+            "title": "Color",
+            "type": "string"
+          },
+          "baseline_comparison": {
+            "additionalProperties": false,
+            "properties": {
+              "passed": {
+                "minimum": 0,
+                "title": "Passed",
+                "type": "integer"
+              },
+              "total": {
+                "minimum": 1,
+                "title": "Total",
+                "type": "integer"
+              },
+              "note": {
+                "minLength": 1,
+                "title": "Note",
+                "type": "string"
+              }
+            },
+            "required": [
+              "passed",
+              "total",
+              "note"
+            ],
+            "title": "Baseline Comparison",
+            "type": "object"
+          },
+          "scope": {
+            "minLength": 1,
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "system_id",
+          "scaffold",
+          "model_binding",
+          "evidence_label",
+          "repetition",
+          "single_attempt_rate",
+          "pass_at_k",
+          "pass_all_k",
+          "reliability_claimable",
+          "reliability_note",
+          "performance",
+          "scope"
+        ],
+        "title": "EvaluatedSystem",
+        "type": "object"
+      },
+      "minItems": 1,
+      "title": "Systems",
+      "type": "array"
+    },
+    "uncertainty": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "judge_error_included": {
+          "const": false,
+          "title": "Judge Error Included",
+          "type": "boolean"
+        },
+        "grading_basis": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Grading Basis",
+          "type": "array"
+        },
+        "notes": {
+          "minLength": 1,
+          "title": "Notes",
+          "type": "string"
+        }
+      },
+      "required": [
+        "method",
+        "judge_error_included",
+        "grading_basis",
+        "notes"
+      ],
+      "title": "Uncertainty",
+      "type": "object"
+    },
+    "holdout_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "split": {
+          "minLength": 1,
+          "title": "Split",
+          "type": "string"
+        },
+        "case_origins": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Case Origins",
+          "type": "array"
+        },
+        "statement": {
+          "minLength": 1,
+          "title": "Statement",
+          "type": "string"
+        }
+      },
+      "required": [
+        "split",
+        "case_origins",
+        "statement"
+      ],
+      "title": "Holdout Policy",
+      "type": "object"
+    },
+    "verdict": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "enum": [
+            "RED",
+            "AMBER",
+            "GREEN"
+          ],
+          "title": "Color",
+          "type": "string"
+        },
+        "quality": {
+          "enum": [
+            "passed",
+            "failed",
+            "unknown"
+          ],
+          "title": "Quality",
+          "type": "string"
+        },
+        "authorizes_execution": {
+          "const": false,
+          "title": "Authorizes Execution",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "authorizes_execution"
+      ],
+      "title": "Verdict",
+      "type": "object"
+    },
+    "limits": {
+      "minLength": 1,
+      "title": "Limits",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "card_sha256",
+    "issued_at",
+    "mode",
+    "construct",
+    "evaluation",
+    "systems",
+    "uncertainty",
+    "holdout_policy",
+    "verdict",
+    "limits"
+  ],
+  "title": "EvaluationCard",
+  "type": "object"
+}

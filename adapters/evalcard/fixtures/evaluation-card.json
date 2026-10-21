@@ -1,0 +1,102 @@
+{
+  "schema_version": "fabric.evaluation-card/v1",
+  "issued_at": "2026-10-21T00:00:00+00:00",
+  "mode": "workload-pipeline",
+  "construct": {
+    "statement": "Whether a candidate interprets one bounded operational snapshot into the frozen access-triage decision without execution authority.",
+    "metric": "Exact-output GREEN grade per case against frozen references within the declared per-trial deadline.",
+    "gaming_analysis": "A digest-keyed replay table could satisfy exact-output grading without interpretation capability, so evidence labels separate LIVE from REHEARSAL.",
+    "construct_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "evaluation": {
+    "source_schema_version": "folsom.workload-pipeline/v1",
+    "source_id": "fixture-suite-v1",
+    "binding_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "measured_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "split": "development"
+  },
+  "systems": [
+    {
+      "system_id": "fixture-candidate",
+      "scaffold": {
+        "adapter": "replay",
+        "procedure_revision": "fixture-procedure-v1"
+      },
+      "model_binding": {
+        "candidate_kind": "recorded-model",
+        "profile_sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "evidence_label": "REHEARSAL",
+      "repetition": {
+        "trials_per_case": 2,
+        "case_count": 2,
+        "total_trials": 4,
+        "incomplete_trials": 0
+      },
+      "single_attempt_rate": {
+        "value": 0.75,
+        "passed": 3,
+        "total": 4,
+        "wilson_95": [
+          0.3995,
+          0.9365
+        ]
+      },
+      "pass_at_k": {
+        "value": 1.0,
+        "passed": 2,
+        "total": 2,
+        "wilson_95": [
+          0.3424,
+          1.0
+        ]
+      },
+      "pass_all_k": {
+        "value": 0.5,
+        "passed": 1,
+        "total": 2,
+        "k": 2,
+        "wilson_95": [
+          0.0945,
+          0.9055
+        ]
+      },
+      "reliability_claimable": false,
+      "reliability_note": "Incomplete trials are present; consistency is not claimable for this cell.",
+      "performance": {
+        "latency": {
+          "unit": "seconds",
+          "mean": 0.25,
+          "max": 0.4
+        },
+        "model_calls": 0,
+        "deadline": {
+          "unit": "seconds",
+          "value": 60
+        }
+      },
+      "scope": "fixture cohort with retained replay responses only"
+    }
+  ],
+  "uncertainty": {
+    "method": "Wilson score interval (z=1.96) on binomial case outcomes",
+    "judge_error_included": false,
+    "grading_basis": [
+      "imported exact-output grades; no verifier ran"
+    ],
+    "notes": "Reference-authoring error remains unquantified for this cohort."
+  },
+  "holdout_policy": {
+    "split": "development",
+    "case_origins": [
+      "synthetic"
+    ],
+    "statement": "Declared held-out status does not independently establish non-contamination."
+  },
+  "verdict": {
+    "color": "AMBER",
+    "authorizes_execution": false
+  },
+  "limits": "Bounded fixture execution; no operational claim follows from this card.",
+  "card_sha256": "d77fc04e31df464589fe74ceb5a6b8183a0e4d189805eca6d27b5999dff840f8"
+}
