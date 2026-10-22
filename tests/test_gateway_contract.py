@@ -167,3 +167,114 @@ def test_chains_and_timeline_keep_legacy_response_shapes(monkeypatch):
     assert timeline["cross_links"] == {
         "corr-1": ["entry-1", "entry-2"],
     }
+
+
+# --- page_size honoring and clamping --------------------------------------
+#
+# Production incident (October 2026): consumers passing page_size=100 to
+# GET /api/entries received up to 10,000 full-content entries, and the
+# request outran every consumer's HTTP timeout against the 14.5M-row
+# ledger. The REST contract these tests pin: an explicit page_size bounds
+# both the response body and the gateway's backend work, clamped to
+# [1, 10000]. When page_size is absent the historical defaults (100 for
+# /api/entries, 10000 for the capped read endpoints) must be preserved so
+# existing consumers see no change.
+
+
+class _FakeRunawayPageClient:
+    """Backend page that ignores the requested page_size.
+
+    Stand-in for the deployed incident: the ledger handed back far more
+    entries than the gateway asked for, so a page_size=100 request carried
+    up to 10,000 entries. The gateway must enforce the cap itself rather
+    than trust the backend page.
+    """
+
+    def __init__(self, entries):
+        self.entries = entries
+        self.query_kwargs = None
+
+    def query_page(self, **kwargs):
+        self.query_kwargs = kwargs
+        return list(self.entries), "next-page", len(self.entries)
+
+
+class _FakeBoundedLedger:
+    """Serves a large result set one backend page at a time, honouring the
+    requested page_size like the gRPC service does."""
+
+    def __init__(self, total):
+        self.total = total
+        self.requested_page_sizes = []
+
+    def query_page(self, *, page_size, page_token="", **kwargs):
+        self.requested_page_sizes.append(page_size)
+        start = int(page_token) if page_token else 0
+        count = max(0, min(page_size, self.total - start))
+        next_token = str(start + count) if start + count < self.total else ""
+        return [_entry() for _ in range(count)], next_token, self.total
+
+
+def _entries(n):
+    entries = [_entry() for _ in range(n)]
+    for i, e in enumerate(entries):
+        e.entry_id = f"entry-{i}"
+    return entries
+
+
+def test_entries_honors_explicit_page_size(monkeypatch):
+    ledger = _FakeRunawayPageClient(_entries(5))
+    monkeypatch.setattr(gateway, "get_client", lambda: ledger)
+
+    response = TestClient(gateway.app).get("/api/entries?page_size=2")
+
+    assert response.status_code == 200
+    assert ledger.query_kwargs["page_size"] == 2  # forwarded to the ledger
+    body = response.json()
+    assert len(body["entries"]) <= 2  # and enforced in the response
+    assert [e["entry_id"] for e in body["entries"]] == ["entry-0", "entry-1"]
+    assert body["next_page_token"] == "next-page"
+
+
+def test_entries_default_page_size_is_unchanged_when_absent(monkeypatch):
+    ledger = _FakeRunawayPageClient(_entries(3))
+    monkeypatch.setattr(gateway, "get_client", lambda: ledger)
+
+    response = TestClient(gateway.app).get("/api/entries")
+
+    assert response.status_code == 200
+    # No page_size requested: the historical default is forwarded unchanged
+    # and the single-page response shape is preserved.
+    assert ledger.query_kwargs["page_size"] == 100
+    assert len(response.json()["entries"]) == 3
+
+
+def test_entries_clamps_explicit_page_size_into_supported_range(monkeypatch):
+    ledger = _FakeRunawayPageClient(_entries(1))
+    monkeypatch.setattr(gateway, "get_client", lambda: ledger)
+    client = TestClient(gateway.app)
+
+    assert client.get("/api/entries?page_size=0").status_code == 200
+    assert ledger.query_kwargs["page_size"] == 1
+
+    assert client.get("/api/entries?page_size=-5").status_code == 200
+    assert ledger.query_kwargs["page_size"] == 1
+
+    assert client.get("/api/entries?page_size=999999").status_code == 200
+    assert ledger.query_kwargs["page_size"] == 10000
+
+
+def test_capped_read_endpoints_clamp_runaway_page_size(monkeypatch):
+    ledger = _FakeBoundedLedger(total=12000)
+    monkeypatch.setattr(gateway, "get_client", lambda: ledger)
+
+    response = TestClient(gateway.app).get("/api/summary?page_size=999999")
+
+    assert response.status_code == 200
+    body = response.json()
+    # A runaway page_size must not turn a capped read into a full-ledger
+    # scan: gateway work stops at the maximum supported page size.
+    assert body["total_entries"] == 10000
+    assert body["truncated"] is True
+    # The internal 500-entry backend page is preserved.
+    assert max(ledger.requested_page_sizes) <= 500

@@ -161,8 +161,26 @@ async def _run_sync(fn, *args, **kwargs):
     return await loop.run_in_executor(None, partial(fn, *args, **kwargs))
 
 
+# Bounds for the client-facing page_size query parameter, shared by
+# /api/entries and the _query_capped read endpoints. An explicit page_size
+# must bound both the response body and the gateway's backend work: a
+# runaway value used to turn a capped read into a scan of the whole ledger
+# (25-90+ s on the 14.5M-row production ledger, past every consumer's HTTP
+# timeout). When page_size is absent the historical defaults apply (100 for
+# /api/entries, 10000 for the capped read endpoints), so existing consumers
+# are unaffected.
+PAGE_SIZE_MIN = 1
+PAGE_SIZE_MAX = 10000
+
+
+def _clamp_page_size(page_size):
+    """Clamp an explicit page_size into the range the gateway supports."""
+    return max(PAGE_SIZE_MIN, min(PAGE_SIZE_MAX, page_size))
+
+
 async def _query_capped(max_entries=10000, **kwargs):
     """Paginated query that stops after max_entries. Returns (entries, truncated)."""
+    max_entries = _clamp_page_size(max_entries)
     c = get_client()
     entries = []
     page_token = ""
@@ -305,10 +323,15 @@ async def get_entries(
     if correlation_id: kwargs["correlation_id"] = correlation_id
     if from_ts is not None: kwargs["from_ts"] = from_ts
     if to_ts is not None: kwargs["to_ts"] = to_ts
+    # Honor the client's page_size, clamped to the supported range, and
+    # enforce it in the response: the backend page is trusted to respect the
+    # requested size, but the REST contract ("at most page_size entries")
+    # is the gateway's to keep.
+    requested_page_size = _clamp_page_size(page_size)
     entries, next_token, total_count = await _run_sync(
-        c.query_page, page_size=page_size, page_token=page_token, **kwargs)
+        c.query_page, page_size=requested_page_size, page_token=page_token, **kwargs)
     return {
-        "entries": [_entry_to_dict(e) for e in entries],
+        "entries": [_entry_to_dict(e) for e in entries[:requested_page_size]],
         "next_page_token": next_token,
         "total_count": total_count,
     }
@@ -351,7 +374,7 @@ async def get_summary(
     if truncated:
         result["truncated"] = True
         result["truncated_note"] = (
-            f"Results capped at {page_size} entries; apply filters for accuracy"
+            f"Results capped at {_clamp_page_size(page_size)} entries; apply filters for accuracy"
         )
     return result
 
