@@ -203,6 +203,13 @@ pub struct ImmutableLedgerService<R: LedgerRepository, P: EventPublisher> {
     publisher: Arc<P>,
     config: Arc<AppConfig>,
     chain_halted: Arc<RwLock<std::collections::HashMap<String, std::time::Instant>>>,
+    /// Per-chain append serialization. The service is the sole writer for
+    /// each chain; concurrent appends racing for the next chain position
+    /// turn every collision into a ChainIntegrityViolation retry (and,
+    /// under write bursts, into chain halts). Serializing per entry_type
+    /// removes the contention while leaving different chains concurrent.
+    chain_locks:
+        Arc<std::sync::Mutex<std::collections::HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
 }
 
 impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedgerService<R, P> {
@@ -212,6 +219,9 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
             publisher,
             config,
             chain_halted: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            chain_locks: Arc::new(std::sync::Mutex::new(
+                std::collections::HashMap::new(),
+            )),
         };
         if service.publisher.is_enabled() {
             service.start_outbox_processor();
@@ -322,6 +332,17 @@ impl<R: LedgerRepository + 'static, P: EventPublisher + 'static> ImmutableLedger
         }
 
         let max_retries = self.config.chain_max_retries;
+        // Serialize appends per chain: the tip read and the entry write
+        // happen under the chain's lock so no two in-flight appends can
+        // compute the same next position.
+        let chain_lock = {
+            let mut locks = self.chain_locks.lock().expect("chain locks poisoned");
+            locks
+                .entry(input.entry_type.clone())
+                .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+                .clone()
+        };
+        let _chain_guard = chain_lock.lock().await;
         for attempt in 0..max_retries {
             let previous_hash = match self.repo.get_chain_tip(&input.entry_type).await {
                 Ok(tip) => tip.hash,
