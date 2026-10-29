@@ -129,16 +129,15 @@ def normalize_content(content):
     return content
 
 
-def _entry_to_dict(e):
+def _entry_to_dict(e, include_raw: bool = True):
     try:
         content_parsed = json.loads(e.content.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError):
         content_parsed = None
-    return {
+    d = {
         "entry_id": e.entry_id,
         "entry_type": e.entry_type,
         "agent_id": e.agent_id,
-        "content_raw": e.content.decode("utf-8", errors="replace"),
         "content": content_parsed,
         "content_type": e.content_type,
         "source_id": e.source_id,
@@ -153,6 +152,17 @@ def _entry_to_dict(e):
         "attestation_report": e.attestation_report.hex() if e.attestation_report else "",
         "hash_version": e.hash_version,
     }
+    # Content omission for audit-style reads: the GCL audit judges drop
+    # decisions from the parsed content object; only the redundant raw
+    # string form is omitted, halving response weight on large ledgers.
+    # Opt-in via include_content_raw=false; default preserves the
+    # original shape.
+    if include_raw:
+        d["content_raw"] = e.content.decode("utf-8", errors="replace")
+    else:
+        d["content_raw"] = ""
+        d["content_omitted"] = True
+    return d
 
 
 async def _run_sync(fn, *args, **kwargs):
@@ -296,6 +306,7 @@ async def get_entries(
     to_ts: Optional[int] = Query(None),
     page_size: int = Query(100),
     page_token: str = Query(""),
+    include_content_raw: bool = Query(True),
 ):
     c = get_client()
     kwargs = {}
@@ -308,7 +319,10 @@ async def get_entries(
     entries, next_token, total_count = await _run_sync(
         c.query_page, page_size=page_size, page_token=page_token, **kwargs)
     return {
-        "entries": [_entry_to_dict(e) for e in entries],
+        "entries": [
+            _entry_to_dict(e, include_raw=include_content_raw)
+            for e in entries
+        ],
         "next_page_token": next_token,
         "total_count": total_count,
     }
