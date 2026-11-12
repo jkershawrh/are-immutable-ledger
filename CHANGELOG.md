@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **REST gateway maps gRPC errors to honest HTTP statuses.** An unhandled
+  `RpcError` on the write endpoints (`POST /api/entries`,
+  `POST /api/receipts`) surfaced as a generic HTTP 500, making permanently
+  rejected content (gRPC `INVALID_ARGUMENT`, e.g. above the 1 MiB content
+  limit) indistinguishable from transient failure. A client receipt spool
+  retried undeliverable entries for two weeks against those 500s, pinning
+  the spool at its byte bound and severing decision-receipt delivery
+  (observed 2026-10-29 through 2026-11-12). Status codes now map:
+  `INVALID_ARGUMENT` → 400 (with the gateway's detail message),
+  `NOT_FOUND` → 404, `ALREADY_EXISTS` → 409,
+  `UNAVAILABLE`/`DEADLINE_EXCEEDED` → 503, anything else → 500.
+
 ## [0.2.0] — 2026-10-16
 
 ### Added
