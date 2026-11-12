@@ -167,3 +167,78 @@ def test_chains_and_timeline_keep_legacy_response_shapes(monkeypatch):
     assert timeline["cross_links"] == {
         "corr-1": ["entry-1", "entry-2"],
     }
+
+
+import grpc
+
+
+def _fake_rpc_error(code, details):
+    """A grpc.RpcError stand-in the endpoint's except clause can catch."""
+
+    class _FakeRpcError(grpc.RpcError):
+        def __init__(self):
+            super().__init__(details)
+            self._code = code
+            self._details = details
+
+        def code(self):
+            return self._code
+
+        def details(self):
+            return self._details
+
+    return _FakeRpcError()
+
+
+class TestGrpcErrorMapping:
+    """gRPC errors must map to honest HTTP statuses.
+
+    Production incident (2026-11-12): an unhandled RpcError surfaced as a
+    generic 500, so permanently rejected content (INVALID_ARGUMENT, e.g.
+    oversized) was indistinguishable from transient failure — a client
+    receipt spool retried undeliverable entries for two weeks. Permanent
+    rejections must answer 4xx.
+    """
+
+    def test_invalid_argument_maps_to_400(self):
+        import grpc
+
+        resp = gateway._grpc_error_response(
+            _fake_rpc_error(grpc.StatusCode.INVALID_ARGUMENT,
+                          "content exceeds max 1048576 bytes"))
+        assert resp.status_code == 400
+        assert "exceeds max" in resp.body.decode()
+
+    def test_unavailable_maps_to_503(self):
+        import grpc
+
+        resp = gateway._grpc_error_response(
+            _fake_rpc_error(grpc.StatusCode.UNAVAILABLE, "starting"))
+        assert resp.status_code == 503
+
+    def test_internal_maps_to_500(self):
+        import grpc
+
+        resp = gateway._grpc_error_response(
+            _fake_rpc_error(grpc.StatusCode.INTERNAL, "boom"))
+        assert resp.status_code == 500
+
+    def test_write_endpoint_maps_oversized_rejection(self, monkeypatch):
+        """POST /api/receipts answers 400, not 500, for oversized content."""
+        import grpc
+
+        def raise_invalid(**kwargs):
+            raise _fake_rpc_error(grpc.StatusCode.INVALID_ARGUMENT,
+                                  "content exceeds max 1048576 bytes")
+
+        monkeypatch.setattr(gateway, "get_client",
+                            lambda: SimpleNamespace(issue_receipt=raise_invalid))
+        with TestClient(gateway.app) as client:
+            response = client.post("/api/receipts", json={
+                "entry_type": "decision.record", "agent_id": "probe",
+                "content": "x", "content_type": "application/json",
+                "source_id": "probe", "correlation_id": "c",
+                "idempotency_key": "k", "input_hash": "h",
+            })
+        assert response.status_code == 400
+        assert "exceeds max" in response.json()["error"]

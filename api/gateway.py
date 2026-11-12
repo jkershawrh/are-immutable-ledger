@@ -28,6 +28,7 @@ import sys
 from functools import partial
 from typing import Optional
 
+import grpc
 from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -189,24 +190,56 @@ async def _query_capped(max_entries=10000, **kwargs):
         page_token = next_token
 
 
+def _grpc_error_response(exc: "grpc.RpcError"):
+    """Map gRPC status codes to honest HTTP responses.
+
+    An unhandled RpcError surfaces as a generic 500, which clients
+    correctly treat as transient and retry forever — permanently rejected
+    content (INVALID_ARGUMENT, e.g. oversized) must answer 400 so clients
+    can distinguish it. Observed in production: a two-week receipt-spool
+    poisoning driven by oversized entries retried against 500s.
+    """
+    code = exc.code()
+    if code == grpc.StatusCode.INVALID_ARGUMENT:
+        return JSONResponse(
+            {"error": str(exc.details() or "invalid argument")},
+            status_code=400,
+        )
+    if code == grpc.StatusCode.NOT_FOUND:
+        return JSONResponse({"error": str(exc.details() or "not found")}, status_code=404)
+    if code == grpc.StatusCode.ALREADY_EXISTS:
+        return JSONResponse({"error": str(exc.details() or "already exists")}, status_code=409)
+    if code in (grpc.StatusCode.UNAVAILABLE, grpc.StatusCode.DEADLINE_EXCEEDED):
+        return JSONResponse(
+            {"error": str(exc.details() or "temporarily unavailable")},
+            status_code=503,
+        )
+    return JSONResponse(
+        {"error": str(exc.details() or "ledger error")}, status_code=500,
+    )
+
+
 @app.post("/api/entries", status_code=201)
 async def write_entry(request: Request):
     body = await request.json()
     c = get_client()
-    resp = await _run_sync(
-        c.write,
-        entry_type=body.get("entry_type", ""),
-        agent_id=body.get("agent_id", ""),
-        content=normalize_content(body.get("content", "")),
-        content_type=body.get("content_type", "application/json"),
-        source_id=body.get("source_id", ""),
-        correlation_id=body.get("correlation_id", ""),
-        idempotency_key=body.get("idempotency_key", ""),
-        input_hash=body.get("input_hash", ""),
-        writer_signature=bytes.fromhex(body["writer_signature"]) if body.get("writer_signature") else b"",
-        signer_key_reference=body.get("signer_key_reference", ""),
-        attestation_report=bytes.fromhex(body["attestation_report"]) if body.get("attestation_report") else b"",
-    )
+    try:
+        resp = await _run_sync(
+            c.write,
+            entry_type=body.get("entry_type", ""),
+            agent_id=body.get("agent_id", ""),
+            content=normalize_content(body.get("content", "")),
+            content_type=body.get("content_type", "application/json"),
+            source_id=body.get("source_id", ""),
+            correlation_id=body.get("correlation_id", ""),
+            idempotency_key=body.get("idempotency_key", ""),
+            input_hash=body.get("input_hash", ""),
+            writer_signature=bytes.fromhex(body["writer_signature"]) if body.get("writer_signature") else b"",
+            signer_key_reference=body.get("signer_key_reference", ""),
+            attestation_report=bytes.fromhex(body["attestation_report"]) if body.get("attestation_report") else b"",
+        )
+    except grpc.RpcError as exc:
+        return _grpc_error_response(exc)
     return {
         "entry_id": resp.entry_id,
         "entry_hash": resp.entry_hash,
@@ -220,20 +253,23 @@ async def write_entry(request: Request):
 async def issue_receipt(request: Request):
     body = await request.json()
     c = get_client()
-    receipt = await _run_sync(
-        c.issue_receipt,
-        entry_type=body.get("entry_type", ""),
-        agent_id=body.get("agent_id", ""),
-        content=normalize_content(body.get("content", "")),
-        content_type=body.get("content_type", "application/json"),
-        source_id=body.get("source_id", ""),
-        correlation_id=body.get("correlation_id", ""),
-        idempotency_key=body.get("idempotency_key", ""),
-        input_hash=body.get("input_hash", ""),
-        writer_signature=bytes.fromhex(body["writer_signature"]) if body.get("writer_signature") else b"",
-        signer_key_reference=body.get("signer_key_reference", ""),
-        attestation_report=bytes.fromhex(body["attestation_report"]) if body.get("attestation_report") else b"",
-    )
+    try:
+        receipt = await _run_sync(
+            c.issue_receipt,
+            entry_type=body.get("entry_type", ""),
+            agent_id=body.get("agent_id", ""),
+            content=normalize_content(body.get("content", "")),
+            content_type=body.get("content_type", "application/json"),
+            source_id=body.get("source_id", ""),
+            correlation_id=body.get("correlation_id", ""),
+            idempotency_key=body.get("idempotency_key", ""),
+            input_hash=body.get("input_hash", ""),
+            writer_signature=bytes.fromhex(body["writer_signature"]) if body.get("writer_signature") else b"",
+            signer_key_reference=body.get("signer_key_reference", ""),
+            attestation_report=bytes.fromhex(body["attestation_report"]) if body.get("attestation_report") else b"",
+        )
+    except grpc.RpcError as exc:
+        return _grpc_error_response(exc)
     return {
         "entry_hash": receipt.entry_hash,
         "entry_type": receipt.entry_type,
